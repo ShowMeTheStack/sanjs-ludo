@@ -719,32 +719,32 @@
         <h1>SANJS LUDO</h1>
         <p>Choose your game mode</p>
         <div class="mode-buttons">
-            <button class="mode-btn" onclick="startGame('pvp')">
+            <button class="mode-btn" onclick="startGame('pvp')" tabindex="1">
                 <span class="icon">👥</span>
                 <span>4 Players</span>
                 <span class="sub">Local Multiplayer</span>
             </button>
-            <button class="mode-btn" onclick="startGame('ai')">
+            <button class="mode-btn" onclick="startGame('ai')" tabindex="2">
                 <span class="icon">🤖</span>
                 <span>vs AI</span>
                 <span class="sub">1 Human vs 3 AI</span>
             </button>
-            <button class="mode-btn" onclick="startGame('team')">
+            <button class="mode-btn" onclick="startGame('team')" tabindex="3">
                 <span class="icon">⚔️</span>
                 <span>Team Mode</span>
                 <span class="sub">Red+Yellow vs Green+Blue</span>
             </button>
-            <button class="mode-btn" onclick="startGame('team-ai')">
+            <button class="mode-btn" onclick="startGame('team-ai')" tabindex="4">
                 <span class="icon">🤝</span>
                 <span>Team vs AI</span>
                 <span class="sub">You+AI vs AI+AI</span>
             </button>
-            <button class="mode-btn" onclick="startGame('diagonal')">
+            <button class="mode-btn" onclick="startGame('diagonal')" tabindex="5">
                 <span class="icon">🎯</span>
                 <span>2P Diagonal</span>
                 <span class="sub">Red vs Yellow</span>
             </button>
-            <button class="mode-btn" onclick="startGame('diagonal-ai')">
+            <button class="mode-btn" onclick="startGame('diagonal-ai')" tabindex="6">
                 <span class="icon">🎲</span>
                 <span>Diagonal vs AI</span>
                 <span class="sub">Red (You) vs Yellow (AI)</span>
@@ -753,7 +753,7 @@
         <div class="options-section">
             <div class="options-title">Game Options</div>
             <div class="option-row">
-                <input type="checkbox" id="releaseOnOne" checked>
+                <input type="checkbox" id="releaseOnOne" checked tabindex="7">
                 <label for="releaseOnOne">Release pieces on 1 or 6</label>
             </div>
             <div class="option-hint">Uncheck for classic rules (6 only)</div>
@@ -1114,6 +1114,102 @@
     let selectableTokens = [];
     let currentTokenIndex = -1;
     
+    // Home screen navigation
+    function setupHomeScreenNavigation() {
+        const modeButtons = document.querySelectorAll('.mode-btn');
+        const checkbox = document.getElementById('releaseOnOne');
+        const allElements = [...modeButtons, checkbox];
+        
+        // Focus first button when home screen is shown
+        setTimeout(() => {
+            if (!document.getElementById('modeSelection').classList.contains('hidden')) {
+                modeButtons[0]?.focus();
+            }
+        }, 100);
+    }
+    
+    function handleHomeScreenKeydown(event) {
+        const modeSelection = document.getElementById('modeSelection');
+        if (modeSelection.classList.contains('hidden')) return false;
+        
+        const modeButtons = Array.from(document.querySelectorAll('.mode-btn'));
+        const checkbox = document.getElementById('releaseOnOne');
+        const currentFocus = document.activeElement;
+        
+        const key = event.key;
+        
+        // Find current index
+        let currentIdx = modeButtons.indexOf(currentFocus);
+        const isOnCheckbox = currentFocus === checkbox;
+        
+        if (key === 'ArrowRight') {
+            event.preventDefault();
+            if (isOnCheckbox) {
+                modeButtons[0]?.focus();
+            } else if (currentIdx >= 0 && currentIdx < modeButtons.length - 1) {
+                modeButtons[currentIdx + 1].focus();
+            } else if (currentIdx === modeButtons.length - 1) {
+                checkbox.focus();
+            }
+            return true;
+        }
+        
+        if (key === 'ArrowLeft') {
+            event.preventDefault();
+            if (isOnCheckbox) {
+                modeButtons[modeButtons.length - 1]?.focus();
+            } else if (currentIdx > 0) {
+                modeButtons[currentIdx - 1].focus();
+            } else if (currentIdx === 0) {
+                checkbox.focus();
+            }
+            return true;
+        }
+        
+        if (key === 'ArrowDown') {
+            event.preventDefault();
+            if (isOnCheckbox) {
+                modeButtons[0]?.focus();
+            } else if (currentIdx >= 0) {
+                // Move to button below (assuming 4 per row on large screens, 2 on small)
+                const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
+                const nextIdx = currentIdx + buttonsPerRow;
+                if (nextIdx < modeButtons.length) {
+                    modeButtons[nextIdx].focus();
+                } else {
+                    checkbox.focus();
+                }
+            }
+            return true;
+        }
+        
+        if (key === 'ArrowUp') {
+            event.preventDefault();
+            if (isOnCheckbox) {
+                // Go to last row of buttons
+                const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
+                const lastRowStart = Math.floor((modeButtons.length - 1) / buttonsPerRow) * buttonsPerRow;
+                modeButtons[lastRowStart]?.focus();
+            } else if (currentIdx >= 0) {
+                const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
+                const prevIdx = currentIdx - buttonsPerRow;
+                if (prevIdx >= 0) {
+                    modeButtons[prevIdx].focus();
+                }
+            }
+            return true;
+        }
+        
+        // Space to toggle checkbox
+        if (key === ' ' && isOnCheckbox) {
+            event.preventDefault();
+            checkbox.checked = !checkbox.checked;
+            return true;
+        }
+        
+        return false;
+    }
+    
     function onDiceKey(event, color) {
         // Enter, Space, or OK button (typically keyCode 13)
         if (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13) {
@@ -1230,6 +1326,27 @@
     
     // Global keyboard listener
     document.addEventListener('keydown', function(event) {
+        // Handle home screen navigation first
+        if (handleHomeScreenKeydown(event)) {
+            return;
+        }
+        
+        // Handle confirmation modal
+        const confirmModal = document.getElementById('confirmModal');
+        if (confirmModal.classList.contains('show')) {
+            const yesBtn = document.getElementById('confirmYes');
+            const noBtn = document.getElementById('confirmNo');
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                if (document.activeElement === yesBtn) {
+                    noBtn.focus();
+                } else {
+                    yesBtn.focus();
+                }
+            }
+            return;
+        }
+        
         // Handle token navigation when tokens are selectable
         if (selectableTokens.length > 0) {
             handleTokenKeydown(event);
@@ -2047,6 +2164,7 @@
     function resetGame() {
         document.getElementById('winnerModal').classList.remove('show');
         document.getElementById('modeSelection').classList.remove('hidden');
+        setupHomeScreenNavigation();
     }
     
     // =====================================================
@@ -2103,6 +2221,7 @@
                 gameOver = true;
                 document.getElementById('winnerModal').classList.remove('show');
                 document.getElementById('modeSelection').classList.remove('hidden');
+                setupHomeScreenNavigation();
             }
         );
     }
@@ -2117,6 +2236,7 @@
         updateAllDice();
         updateUI();
         renderTokens();
+        setupHomeScreenNavigation();
     };
     </script>
 </body>
