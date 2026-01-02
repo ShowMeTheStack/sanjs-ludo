@@ -15,6 +15,7 @@
             flex-direction: column;
             align-items: center;
             padding: 15px;
+            overflow-x: hidden;
         }
 
         h1 {
@@ -31,8 +32,10 @@
             display: flex;
             gap: 25px;
             align-items: flex-start;
-            flex-wrap: wrap;
             justify-content: center;
+            flex: 1;
+            width: 100%;
+            max-width: 1200px;
         }
 
         .board-wrapper {
@@ -41,14 +44,15 @@
             border-radius: 12px;
             box-shadow: 0 15px 40px rgba(0,0,0,0.5);
             position: relative;
+            flex-shrink: 0;
         }
 
         .board {
             display: grid;
             grid-template-columns: repeat(15, 1fr);
             grid-template-rows: repeat(15, 1fr);
-            width: min(85vmin, 560px);
-            height: min(85vmin, 560px);
+            width: min(calc(100vh - 100px), calc(100vw - 40px), 560px);
+            height: min(calc(100vh - 100px), calc(100vw - 40px), 560px);
             background: #f5f5dc;
             border-radius: 6px;
             overflow: hidden;
@@ -436,9 +440,17 @@
         .mode-selection h1 { font-size: 3rem; }
         .mode-selection p { color: rgba(255,255,255,0.7); font-size: 1rem; }
 
-        .mode-buttons { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; max-width: 600px; }
+        .mode-buttons { 
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            max-width: 700px;
+            width: 100%;
+            padding: 0 20px;
+        }
         .mode-btn {
-            padding: 18px 28px;
+            padding: 20px 15px;
             font-size: 1rem;
             background: rgba(255,255,255,0.08);
             border: 2px solid rgba(255,215,0,0.4);
@@ -449,8 +461,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 6px;
-            min-width: 140px;
+            width: 150px;
+            height: 150px;
         }
         .mode-btn:hover { transform: translateY(-3px); background: rgba(255,215,0,0.15); box-shadow: 0 8px 25px rgba(255,215,0,0.25); }
         .mode-btn .icon { font-size: 1.8rem; }
@@ -661,11 +675,42 @@
             outline-offset: 2px;
         }
 
-        @media (max-width: 700px) {
-            .game-container { flex-direction: column; align-items: center; }
-            .side-panel { width: 100%; max-width: 280px; min-width: 280px; }
-            h1 { font-size: 1.5rem; }
-            .mode-selection h1 { font-size: 2rem; }
+        @media (max-width: 900px) {
+            .game-container { 
+                flex-direction: column; 
+                align-items: center;
+            }
+            .board {
+                width: min(calc(100vh - 250px), calc(100vw - 40px), 560px);
+                height: min(calc(100vh - 250px), calc(100vw - 40px), 560px);
+            }
+            .side-panel { 
+                width: 100%; 
+                max-width: 400px; 
+                min-width: auto;
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            .side-panel .panel-card {
+                flex: 1;
+                min-width: 180px;
+            }
+            .side-panel .game-controls {
+                width: 100%;
+            }
+        }
+        
+        @media (max-width: 500px) {
+            h1 { font-size: 1.3rem; }
+            .mode-selection h1 { font-size: 1.8rem; }
+            .mode-btn {
+                width: 130px;
+                height: 130px;
+                padding: 15px 10px;
+                font-size: 0.85rem;
+            }
+            .mode-btn .icon { font-size: 1.5rem; }
+            .mode-btn .sub { font-size: 0.55em; }
         }
     </style>
 </head>
@@ -693,6 +738,16 @@
                 <span class="icon">🤝</span>
                 <span>Team vs AI</span>
                 <span class="sub">You+AI vs AI+AI</span>
+            </button>
+            <button class="mode-btn" onclick="startGame('diagonal')">
+                <span class="icon">🎯</span>
+                <span>2P Diagonal</span>
+                <span class="sub">Red vs Yellow</span>
+            </button>
+            <button class="mode-btn" onclick="startGame('diagonal-ai')">
+                <span class="icon">🎲</span>
+                <span>Diagonal vs AI</span>
+                <span class="sub">Red (You) vs Yellow (AI)</span>
             </button>
         </div>
         <div class="options-section">
@@ -877,6 +932,7 @@
     // =====================================================
     let gameMode = 'pvp';
     let isTeamMode = false;
+    let isDiagonalMode = false;
     let releaseOnOne = true;
     let currentPlayerIdx = 0;
     let diceValue = 0;
@@ -897,6 +953,7 @@
             color,
             name: COLOR_NAMES[color],
             isAI: false,
+            isDisabled: false,
             tokens: [{ pos: -1 }, { pos: -1 }, { pos: -1 }, { pos: -1 }],
             finished: 0,
             finishPosition: -1,
@@ -907,6 +964,7 @@
     function startGame(mode) {
         gameMode = mode;
         isTeamMode = mode === 'team' || mode === 'team-ai';
+        isDiagonalMode = mode === 'diagonal' || mode === 'diagonal-ai';
         releaseOnOne = document.getElementById('releaseOnOne').checked;
         
         initPlayers();
@@ -919,6 +977,15 @@
             players[1].isAI = true;
             players[2].isAI = true;
             players[3].isAI = true;
+        } else if (mode === 'diagonal') {
+            // Red vs Yellow - both human, disable green and blue
+            players[1].isDisabled = true; // Green
+            players[3].isDisabled = true; // Blue
+        } else if (mode === 'diagonal-ai') {
+            // Red (human) vs Yellow (AI), disable green and blue
+            players[1].isDisabled = true; // Green
+            players[2].isAI = true; // Yellow is AI
+            players[3].isDisabled = true; // Blue
         }
         
         document.getElementById('modeSelection').classList.add('hidden');
@@ -1563,6 +1630,21 @@
                         
                         updateUI();
                         
+                        // In diagonal mode, game ends when first player finishes
+                        if (isDiagonalMode) {
+                            // Add the other player as second place
+                            players.forEach((p, idx) => {
+                                if (!p.isDisabled && p.finishPosition === -1) {
+                                    p.finishPosition = 1;
+                                    p.points = FINISH_POINTS[1];
+                                    finishOrder.push(idx);
+                                }
+                            });
+                            renderTokens();
+                            endGame();
+                            return;
+                        }
+                        
                         if (finishOrder.length >= 3) {
                             players.forEach((p, idx) => {
                                 if (p.finishPosition === -1) {
@@ -1779,9 +1861,9 @@
         do {
             currentPlayerIdx = (currentPlayerIdx + 1) % 4;
             attempts++;
-        } while (players[currentPlayerIdx].finished === 4 && attempts < 4);
+        } while ((players[currentPlayerIdx].finished === 4 || players[currentPlayerIdx].isDisabled) && attempts < 4);
 
-        if (attempts >= 4 || finishOrder.length >= 4) {
+        if (attempts >= 4 || finishOrder.length >= (isDiagonalMode ? 2 : 4)) {
             endGame();
             return;
         }
@@ -1807,6 +1889,9 @@
         const cellTokens = {};
 
         players.forEach((player, pIdx) => {
+            // Skip disabled players
+            if (player.isDisabled) return;
+            
             player.tokens.forEach((token, tIdx) => {
                 if (token.pos === 58) return;
 
@@ -1846,11 +1931,21 @@
     }
 
     function updateUI() {
-        document.getElementById('playerList').innerHTML = players.map((p, idx) => {
-            let badges = `<span class="player-badge">${p.isAI ? 'AI' : 'You'}</span>`;
-            if (isTeamMode) {
-                badges += `<span class="team-indicator team-${TEAMS[p.color]}">T${TEAMS[p.color]}</span>`;
+        const activePlayers = players.filter(p => !p.isDisabled);
+        
+        document.getElementById('playerList').innerHTML = activePlayers.map((p) => {
+            const idx = players.indexOf(p);
+            let badge = '';
+            if (p.isAI) {
+                badge = '<span class="player-badge">AI</span>';
+            } else {
+                badge = '<span class="player-badge">You</span>';
             }
+            
+            if (isTeamMode) {
+                badge += `<span class="team-indicator team-${TEAMS[p.color]}">T${TEAMS[p.color]}</span>`;
+            }
+            
             let status = `${p.finished}/4`;
             if (p.finishPosition >= 0) {
                 status = `#${p.finishPosition + 1}`;
@@ -1859,7 +1954,7 @@
                 <div class="player-item ${idx === currentPlayerIdx ? 'active' : ''}">
                     <div class="pdot" style="background: ${getColorHex(p.color)}"></div>
                     <span class="player-name">${p.name}</span>
-                    ${badges}
+                    ${badge}
                     <span class="player-score">${status}</span>
                 </div>
             `;
@@ -1896,7 +1991,9 @@
         gameOver = true;
         updateActiveDice();
         
+        // Assign finish positions to remaining players
         players.forEach((p, idx) => {
+            if (p.isDisabled) return;
             if (p.finishPosition === -1) {
                 p.finishPosition = finishOrder.length;
                 p.points = FINISH_POINTS[finishOrder.length] || 0;
@@ -1925,6 +2022,15 @@
                 <div><strong>Final Scores:</strong></div>
                 <div style="margin-top: 8px;"><span style="color: #ff6b6b;">Team 1: ${team1Score}</span></div>
                 <div style="margin-top: 4px;"><span style="color: #6b6bff;">Team 2: ${team2Score}</span></div>
+            `;
+        } else if (isDiagonalMode) {
+            const winner = players[finishOrder[0]];
+            winnerText = `${winner.name} Wins!`;
+            subText = winner.isAI ? 'AI Victory!' : 'Congratulations!';
+            detailsHTML = `
+                <div><strong>Final Result:</strong></div>
+                <div style="margin-top: 8px;">1st: ${players[finishOrder[0]].name}</div>
+                <div style="margin-top: 4px;">2nd: ${players[finishOrder[1]].name}</div>
             `;
         } else {
             winnerText = `${players[finishOrder[0]].name} Wins!`;
