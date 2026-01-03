@@ -13,9 +13,10 @@
             font-family: 'Segoe UI', sans-serif;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
             padding: 15px;
             overflow-x: hidden;
+            margin: 0;
         }
 
         h1 {
@@ -32,10 +33,9 @@
             display: flex;
             gap: 25px;
             align-items: flex-start;
-            justify-content: center;
+            justify-content: flex-start;
             flex: 1;
             width: 100%;
-            max-width: 1200px;
         }
 
         .board-wrapper {
@@ -51,12 +51,51 @@
             display: grid;
             grid-template-columns: repeat(15, 1fr);
             grid-template-rows: repeat(15, 1fr);
-            width: min(calc(100vh - 100px), calc(100vw - 40px), 560px);
-            height: min(calc(100vh - 100px), calc(100vw - 40px), 560px);
+            width: calc(100vh - 60px);
+            height: calc(100vh - 60px);
+            max-width: calc(100vw - 280px);
+            max-height: calc(100vw - 280px);
             background: #f5f5dc;
             border-radius: 6px;
             overflow: hidden;
             position: relative;
+        }
+        
+        /* Portrait mobile */
+        @media (max-width: 700px), (orientation: portrait) {
+            .game-container { 
+                flex-direction: column; 
+                align-items: center;
+            }
+            .board {
+                width: calc(100vw - 40px);
+                height: calc(100vw - 40px);
+                max-width: none;
+                max-height: none;
+            }
+            .side-panel { 
+                width: 100%; 
+                max-width: 400px; 
+                min-width: auto;
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            .side-panel .panel-card {
+                flex: 1;
+                min-width: 180px;
+            }
+            .side-panel .game-controls {
+                width: 100%;
+            }
+        }
+        
+        /* Landscape with limited height */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .board {
+                width: calc(100vh - 40px);
+                height: calc(100vh - 40px);
+                max-width: none;
+            }
         }
 
         .cell {
@@ -680,33 +719,7 @@
             outline-offset: 2px;
         }
 
-        @media (max-width: 900px) {
-            .game-container { 
-                flex-direction: column; 
-                align-items: center;
-            }
-            .board {
-                width: min(calc(100vh - 250px), calc(100vw - 40px), 560px);
-                height: min(calc(100vh - 250px), calc(100vw - 40px), 560px);
-            }
-            .side-panel { 
-                width: 100%; 
-                max-width: 400px; 
-                min-width: auto;
-                flex-direction: row;
-                flex-wrap: wrap;
-            }
-            .side-panel .panel-card {
-                flex: 1;
-                min-width: 180px;
-            }
-            .side-panel .game-controls {
-                width: 100%;
-            }
-        }
-        
         @media (max-width: 500px) {
-            h1 { font-size: 1.3rem; }
             .mode-selection h1 { font-size: 1.8rem; }
             .mode-btn {
                 width: 130px;
@@ -774,8 +787,6 @@
             <div class="option-hint">Higher chance of rolling capture numbers</div>
         </div>
     </div>
-
-    <h1>SANJS LUDO</h1>
 
     <div class="game-container">
         <div class="board-wrapper">
