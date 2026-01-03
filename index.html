@@ -346,6 +346,11 @@
         .stack-2 { transform: translate(-25%, 25%) scale(0.55); z-index: 13; }
         .stack-3 { transform: translate(25%, 25%) scale(0.55); z-index: 14; }
 
+        .token.finished {
+            opacity: 0.9;
+            box-shadow: 0 0 8px rgba(255,215,0,0.6), 0 2px 4px rgba(0,0,0,0.3);
+        }
+
         .token.selectable.stack-0:hover,
         .token.selectable.stack-1:hover,
         .token.selectable.stack-2:hover,
@@ -757,6 +762,16 @@
                 <label for="releaseOnOne">Release pieces on 1 or 6</label>
             </div>
             <div class="option-hint">Uncheck for classic rules (6 only)</div>
+            <div class="option-row">
+                <input type="checkbox" id="showCaptureIndicator" checked tabindex="8">
+                <label for="showCaptureIndicator">Show capture indicator</label>
+            </div>
+            <div class="option-hint">Highlight pieces that can be captured</div>
+            <div class="option-row">
+                <input type="checkbox" id="useWeightedDice" tabindex="9">
+                <label for="useWeightedDice">Lucky dice</label>
+            </div>
+            <div class="option-hint">Higher chance of rolling capture numbers</div>
         </div>
     </div>
 
@@ -802,8 +817,8 @@
             </div>
             
             <div class="panel-card game-controls">
-                <button class="control-btn reset-btn" onclick="confirmReset()" tabindex="5">🔄 Reset Game</button>
-                <button class="control-btn end-btn" onclick="confirmEndGame()" tabindex="6">🏠 End Game</button>
+                <button class="control-btn reset-btn" onclick="confirmReset()" tabindex="10">🔄 Reset Game</button>
+                <button class="control-btn end-btn" onclick="confirmEndGame()" tabindex="11">🏠 End Game</button>
             </div>
         </div>
     </div>
@@ -853,7 +868,7 @@
         [14,7], [14,6],
         [13,6], [12,6], [11,6], [10,6], [9,6],
         [8,5], [8,4], [8,3], [8,2], [8,1], [8,0],
-        [7,0], [6,0],
+        [7,0],
         [7,1], [7,2], [7,3], [7,4], [7,5],
         [7,6]
     ];
@@ -870,7 +885,7 @@
         [7,0], [6,0],
         [6,1], [6,2], [6,3], [6,4], [6,5],
         [5,6], [4,6], [3,6], [2,6], [1,6], [0,6],
-        [0,7], [0,8],
+        [0,7],
         [1,7], [2,7], [3,7], [4,7], [5,7],
         [6,7]
     ];
@@ -887,7 +902,7 @@
         [0,7], [0,8],
         [1,8], [2,8], [3,8], [4,8], [5,8],
         [6,9], [6,10], [6,11], [6,12], [6,13], [6,14],
-        [7,14], [8,14],
+        [7,14],
         [7,13], [7,12], [7,11], [7,10], [7,9],
         [7,8]
     ];
@@ -904,7 +919,7 @@
         [7,14], [8,14],
         [8,13], [8,12], [8,11], [8,10], [8,9],
         [9,8], [10,8], [11,8], [12,8], [13,8], [14,8],
-        [14,7], [14,6],
+        [14,7],
         [13,7], [12,7], [11,7], [10,7], [9,7],
         [8,7]
     ];
@@ -934,6 +949,8 @@
     let isTeamMode = false;
     let isDiagonalMode = false;
     let releaseOnOne = true;
+    let showCaptureIndicator = true;
+    let useWeightedDice = false;
     let currentPlayerIdx = 0;
     let diceValue = 0;
     let diceValues = { red: 1, green: 1, yellow: 1, blue: 1 };
@@ -966,6 +983,8 @@
         isTeamMode = mode === 'team' || mode === 'team-ai';
         isDiagonalMode = mode === 'diagonal' || mode === 'diagonal-ai';
         releaseOnOne = document.getElementById('releaseOnOne').checked;
+        showCaptureIndicator = document.getElementById('showCaptureIndicator').checked;
+        useWeightedDice = document.getElementById('useWeightedDice').checked;
         
         initPlayers();
         
@@ -1061,7 +1080,7 @@
                     cell.classList.add(`start-${color}`);
                 }
                 // Check for home stretch (positions 52-56 now since paths are 2 cells longer)
-                for (let i = 52; i <= 56; i++) {
+                for (let i = 51; i <= 55; i++) {
                     if (path[i] && path[i][0] === r && path[i][1] === c) {
                         cell.classList.add(`stretch-${color}`);
                     }
@@ -1133,14 +1152,19 @@
         if (modeSelection.classList.contains('hidden')) return false;
         
         const modeButtons = Array.from(document.querySelectorAll('.mode-btn'));
-        const checkbox = document.getElementById('releaseOnOne');
+        const checkboxes = [
+            document.getElementById('releaseOnOne'),
+            document.getElementById('showCaptureIndicator'),
+            document.getElementById('useWeightedDice')
+        ];
         const currentFocus = document.activeElement;
         
         const key = event.key;
         
         // Find current index
         let currentIdx = modeButtons.indexOf(currentFocus);
-        const isOnCheckbox = currentFocus === checkbox;
+        const checkboxIdx = checkboxes.indexOf(currentFocus);
+        const isOnCheckbox = checkboxIdx >= 0;
         
         if (key === 'ArrowRight') {
             event.preventDefault();
@@ -1149,7 +1173,7 @@
             } else if (currentIdx >= 0 && currentIdx < modeButtons.length - 1) {
                 modeButtons[currentIdx + 1].focus();
             } else if (currentIdx === modeButtons.length - 1) {
-                checkbox.focus();
+                checkboxes[0].focus();
             }
             return true;
         }
@@ -1161,7 +1185,7 @@
             } else if (currentIdx > 0) {
                 modeButtons[currentIdx - 1].focus();
             } else if (currentIdx === 0) {
-                checkbox.focus();
+                checkboxes[0].focus();
             }
             return true;
         }
@@ -1169,7 +1193,12 @@
         if (key === 'ArrowDown') {
             event.preventDefault();
             if (isOnCheckbox) {
-                modeButtons[0]?.focus();
+                // Move to next checkbox or wrap to buttons
+                if (checkboxIdx < checkboxes.length - 1) {
+                    checkboxes[checkboxIdx + 1].focus();
+                } else {
+                    modeButtons[0]?.focus();
+                }
             } else if (currentIdx >= 0) {
                 // Move to button below (assuming 4 per row on large screens, 2 on small)
                 const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
@@ -1177,7 +1206,7 @@
                 if (nextIdx < modeButtons.length) {
                     modeButtons[nextIdx].focus();
                 } else {
-                    checkbox.focus();
+                    checkboxes[0].focus();
                 }
             }
             return true;
@@ -1186,10 +1215,15 @@
         if (key === 'ArrowUp') {
             event.preventDefault();
             if (isOnCheckbox) {
-                // Go to last row of buttons
-                const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
-                const lastRowStart = Math.floor((modeButtons.length - 1) / buttonsPerRow) * buttonsPerRow;
-                modeButtons[lastRowStart]?.focus();
+                // Move to previous checkbox or wrap to buttons
+                if (checkboxIdx > 0) {
+                    checkboxes[checkboxIdx - 1].focus();
+                } else {
+                    // Go to last row of buttons
+                    const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
+                    const lastRowStart = Math.floor((modeButtons.length - 1) / buttonsPerRow) * buttonsPerRow;
+                    modeButtons[lastRowStart]?.focus();
+                }
             } else if (currentIdx >= 0) {
                 const buttonsPerRow = window.innerWidth > 700 ? 4 : 2;
                 const prevIdx = currentIdx - buttonsPerRow;
@@ -1203,7 +1237,7 @@
         // Space to toggle checkbox
         if (key === ' ' && isOnCheckbox) {
             event.preventDefault();
-            checkbox.checked = !checkbox.checked;
+            currentFocus.checked = !currentFocus.checked;
             return true;
         }
         
@@ -1382,12 +1416,12 @@
                 // Token in cage - boost 6 (and 1 if releaseOnOne)
                 weights[5] += 0.5; // Boost 6
                 if (releaseOnOne) weights[0] += 0.3; // Boost 1
-            } else if (token.pos >= 0 && token.pos < 52) {
+            } else if (token.pos >= 0 && token.pos < 51) {
                 // Token on main track - check each possible move
                 for (let roll = 1; roll <= 6; roll++) {
                     const newPos = token.pos + roll;
                     
-                    if (newPos <= 57) {
+                    if (newPos <= 56) {
                         // Check if this move leads to a capture
                         if (newPos < 52) {
                             const [targetR, targetC] = path[newPos];
@@ -1401,7 +1435,7 @@
                                     
                                     const otherPath = PATHS[other.color];
                                     for (const otherToken of other.tokens) {
-                                        if (otherToken.pos >= 0 && otherToken.pos < 52) {
+                                        if (otherToken.pos >= 0 && otherToken.pos < 51) {
                                             const [or, oc] = otherPath[otherToken.pos];
                                             if (or === targetR && oc === targetC) {
                                                 // Capture possible! Boost this roll significantly
@@ -1427,7 +1461,7 @@
                         }
                         
                         // Slight boost for entering home stretch
-                        if (token.pos < 52 && newPos >= 52) {
+                        if (token.pos < 51 && newPos >= 51) {
                             weights[roll - 1] += 0.5;
                         }
                     }
@@ -1479,8 +1513,8 @@
         faceEl.style.visibility = 'hidden';
         diceEl.classList.add('rolling');
         
-        // Generate weighted dice value
-        diceValue = getWeightedDiceRoll();
+        // Generate dice value (weighted or unweighted based on setting)
+        diceValue = useWeightedDice ? getWeightedDiceRoll() : (Math.floor(Math.random() * 6) + 1);
         diceValues[currentColor] = diceValue;
 
         setTimeout(() => {
@@ -1521,8 +1555,10 @@
                 return;
             }
 
-            // Show capture indicators
-            showCaptureIndicators(moves);
+            // Show capture indicators if enabled
+            if (showCaptureIndicator) {
+                showCaptureIndicators(moves);
+            }
 
             if (moves.length === 1) {
                 setMessage(`Rolled ${diceValue}. Auto-move...`);
@@ -1626,7 +1662,7 @@
     }
 
     function checkCaptureAtPosition(player, pos, playerTeam) {
-        if (pos >= 52) return null;
+        if (pos >= 51) return null;
 
         const path = PATHS[player.color];
         const [r, c] = path[pos];
@@ -1639,7 +1675,7 @@
             if (isTeamMode && TEAMS[other.color] === playerTeam) continue;
 
             for (const otherToken of other.tokens) {
-                if (otherToken.pos >= 0 && otherToken.pos < 52) {
+                if (otherToken.pos >= 0 && otherToken.pos < 51) {
                     const otherPath = PATHS[other.color];
                     const [or, oc] = otherPath[otherToken.pos];
                     
@@ -1667,7 +1703,7 @@
         const moves = [];
 
         player.tokens.forEach((token, idx) => {
-            if (token.pos === 58) return;
+            if (token.pos === 56) return;
 
             if (token.pos === -1) {
                 if (canRelease()) {
@@ -1675,7 +1711,7 @@
                 }
             } else {
                 const newPos = token.pos + diceValue;
-                if (newPos <= 57) {
+                if (newPos <= 56) {
                     moves.push({ tokenIdx: idx, type: 'move', newPos });
                 }
             }
@@ -1735,8 +1771,8 @@
                 token.pos = endPos;
                 let captured = false;
                 
-                if (token.pos === 57) {
-                    token.pos = 56;
+                if (token.pos === 56) {
+                    token.pos = 57; // Mark as finished (57 = done)
                     player.finished++;
                     setMessage(`${player.name} home! (${player.finished}/4)`);
 
@@ -1775,7 +1811,7 @@
                             return;
                         }
                     }
-                } else if (token.pos < 52) {
+                } else if (token.pos < 51) {
                     captured = checkCapture(player, token.pos);
                     if (!captured) {
                         setMessage(`${player.name} moved.`);
@@ -1800,7 +1836,9 @@
             steps.push(path[0]);
         } else {
             for (let i = fromPos + 1; i <= toPos; i++) {
-                steps.push(path[i]);
+                if (path[i]) {
+                    steps.push(path[i]);
+                }
             }
         }
 
@@ -1813,14 +1851,21 @@
             tokenEl.className = `token token-${player.color}`;
             tokenEl.dataset.player = pIdx;
             tokenEl.dataset.token = tokenIdx;
-            tokenEl.textContent = tokenIdx + 1;
             spawnCell.appendChild(tokenEl);
         }
+        
+        // Remove stack classes and make token full size for animation
+        tokenEl.classList.remove('stack-0', 'stack-1', 'stack-2', 'stack-3');
+        tokenEl.style.transform = 'scale(1)';
+        tokenEl.style.zIndex = '100'; // Bring to front during animation
 
         let stepIndex = 0;
 
         function doStep() {
             if (stepIndex >= steps.length) {
+                // Reset styles after animation
+                tokenEl.style.transform = '';
+                tokenEl.style.zIndex = '';
                 callback();
                 return;
             }
@@ -1839,6 +1884,8 @@
         if (steps.length > 0) {
             setTimeout(doStep, 100);
         } else {
+            tokenEl.style.transform = '';
+            tokenEl.style.zIndex = '';
             callback();
         }
     }
@@ -1867,7 +1914,7 @@
     }
 
     function checkCapture(player, pos) {
-        if (pos >= 52) return false;
+        if (pos >= 51) return false;
 
         const path = PATHS[player.color];
         const [r, c] = path[pos];
@@ -1884,7 +1931,7 @@
             if (isTeamMode && TEAMS[other.color] === playerTeam) return;
 
             other.tokens.forEach((otherToken, tIdx) => {
-                if (otherToken.pos >= 0 && otherToken.pos < 52) {
+                if (otherToken.pos >= 0 && otherToken.pos < 51) {
                     const otherPath = PATHS[other.color];
                     const [or, oc] = otherPath[otherToken.pos];
                     
@@ -1933,7 +1980,7 @@
 
                 if (newPos === 55) {
                     score += 1000;
-                } else if (newPos >= 50) {
+                } else if (newPos >= 51) {
                     score += 200 + newPos;
                 } else {
                     const path = PATHS[player.color];
@@ -1945,7 +1992,7 @@
                         if (isTeamMode && TEAMS[other.color] === playerTeam) return;
                         
                         other.tokens.forEach(ot => {
-                            if (ot.pos >= 0 && ot.pos < 52) {
+                            if (ot.pos >= 0 && ot.pos < 51) {
                                 const otherPath = PATHS[other.color];
                                 const [or, oc] = otherPath[ot.pos];
                                 if (or === r && oc === c && !SAFE_CELLS.has(cellKey)) {
@@ -2010,19 +2057,30 @@
             if (player.isDisabled) return;
             
             player.tokens.forEach((token, tIdx) => {
-                if (token.pos === 58) return;
-
                 let r, c;
+                let isFinished = false;
+                
                 if (token.pos === -1) {
+                    // In home base
                     [r, c] = HOME_SPAWNS[player.color][tIdx];
-                } else {
+                } else if (token.pos === 57) {
+                    // Finished - pile up at the finish cell (index 56 of their path)
                     const path = PATHS[player.color];
-                    [r, c] = path[token.pos];
+                    [r, c] = path[56];
+                    isFinished = true;
+                } else {
+                    // On the path
+                    const path = PATHS[player.color];
+                    if (path[token.pos]) {
+                        [r, c] = path[token.pos];
+                    } else {
+                        return; // Invalid position, skip
+                    }
                 }
 
                 const key = `${r}-${c}`;
                 if (!cellTokens[key]) cellTokens[key] = [];
-                cellTokens[key].push({ pIdx, tIdx, color: player.color });
+                cellTokens[key].push({ pIdx, tIdx, color: player.color, finished: isFinished });
             });
         });
 
@@ -2031,18 +2089,56 @@
             const cell = document.getElementById(`cell-${r}-${c}`);
             if (!cell) return;
 
-            tokens.forEach((t, stackIdx) => {
-                const tokenEl = document.createElement('div');
-                tokenEl.className = `token token-${t.color}`;
-                tokenEl.dataset.player = t.pIdx;
-                tokenEl.dataset.token = t.tIdx;
-                tokenEl.textContent = t.tIdx + 1;
+            // Group tokens by color
+            const byColor = {};
+            tokens.forEach(t => {
+                if (!byColor[t.color]) byColor[t.color] = [];
+                byColor[t.color].push(t);
+            });
 
-                if (tokens.length > 1) {
-                    tokenEl.classList.add(`stack-${stackIdx}`);
+            let stackIdx = 0;
+            Object.entries(byColor).forEach(([color, colorTokens]) => {
+                const isFinishPile = colorTokens[0].finished;
+                const count = colorTokens.length;
+
+                if (isFinishPile) {
+                    // Finished tokens - show stacked, no count
+                    colorTokens.forEach((t, idx) => {
+                        const tokenEl = document.createElement('div');
+                        tokenEl.className = `token token-${t.color} finished`;
+                        tokenEl.dataset.player = t.pIdx;
+                        tokenEl.dataset.token = t.tIdx;
+                        if (count > 1) {
+                            tokenEl.classList.add(`stack-${idx % 4}`);
+                        }
+                        cell.appendChild(tokenEl);
+                    });
+                } else if (count >= 2) {
+                    // Multiple tokens of same color - show one token with count
+                    const t = colorTokens[0];
+                    const tokenEl = document.createElement('div');
+                    tokenEl.className = `token token-${t.color}`;
+                    tokenEl.dataset.player = t.pIdx;
+                    tokenEl.dataset.token = t.tIdx;
+                    tokenEl.textContent = count;
+                    if (Object.keys(byColor).length > 1) {
+                        tokenEl.classList.add(`stack-${stackIdx % 4}`);
+                        stackIdx++;
+                    }
+                    cell.appendChild(tokenEl);
+                } else {
+                    // Single token - no count
+                    const t = colorTokens[0];
+                    const tokenEl = document.createElement('div');
+                    tokenEl.className = `token token-${t.color}`;
+                    tokenEl.dataset.player = t.pIdx;
+                    tokenEl.dataset.token = t.tIdx;
+                    if (Object.keys(byColor).length > 1) {
+                        tokenEl.classList.add(`stack-${stackIdx % 4}`);
+                        stackIdx++;
+                    }
+                    cell.appendChild(tokenEl);
                 }
-
-                cell.appendChild(tokenEl);
             });
         });
     }
