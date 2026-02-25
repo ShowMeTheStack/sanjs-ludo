@@ -699,7 +699,14 @@
         /* Game control buttons */
         .game-controls {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
+        }
+        .game-audio-row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
         }
         
         .control-btn {
@@ -816,6 +823,51 @@
             outline-offset: 2px;
         }
 
+        /* Audio control buttons - home screen */
+        .audio-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+        }
+        .audio-btn {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .audio-btn:hover { background: rgba(255,255,255,0.15); }
+        .audio-btn.muted { opacity: 0.5; }
+
+        /* Audio control buttons - in-game */
+        .audio-btn-game {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.08);
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .audio-btn-game:hover { background: rgba(255,255,255,0.2); }
+        .audio-btn-game.muted { opacity: 0.5; }
+        .audio-btn-game:focus {
+            outline: 3px solid #FFD700;
+            outline-offset: 2px;
+        }
+
         @media (max-width: 500px) {
             .mode-selection h1 { font-size: 1.8rem; }
             .mode-btn {
@@ -883,6 +935,10 @@
             </div>
             <div class="option-hint">Higher chance of rolling capture numbers</div>
         </div>
+        <div class="audio-controls">
+            <button class="audio-btn" id="homeMusicBtn" onclick="AudioManager.toggleMusic()">🎵 Music On</button>
+            <button class="audio-btn" id="homeSfxBtn" onclick="AudioManager.toggleSFX()">🔊 SFX On</button>
+        </div>
     </div>
 
     <!-- Debug Menu Overlay -->
@@ -892,6 +948,13 @@
         <button onclick="loadDebugScenario('sixHomeStretch')">2. Six in Home Stretch</button>
         <button onclick="loadDebugScenario('superposedHighlight')">3. Superposed Highlight</button>
         <button onclick="loadDebugScenario('animationThrough')">4. Animation Through</button>
+        <button onclick="loadDebugScenario('stack2sameCell')">5. 2 Same-Color Stacked (move 1 out)</button>
+        <button onclick="loadDebugScenario('stack3sameCell')">6. 3 Same-Color Stacked (move 1 out)</button>
+        <button onclick="loadDebugScenario('stack4sameCell')">7. 4 Same-Color Stacked (release moves)</button>
+        <button onclick="loadDebugScenario('stackMixedColors')">8. Same-Color Stack + Enemy on Cell</button>
+        <button onclick="loadDebugScenario('stackSplitChoice')">9. Split Stack: 2+2 Choose Which</button>
+        <button onclick="loadDebugScenario('stack2v2sameEnemy')">10. 2 Red + 2 Green on same cell</button>
+        <button onclick="loadDebugScenario('stack2v2diffEnemy')">11. 2 Red + Green + Blue on same cell</button>
         <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
     </div>
 
@@ -937,6 +1000,10 @@
             <div class="panel-card game-controls">
                 <button class="control-btn reset-btn" onclick="confirmReset()" tabindex="10">🔄 Reset Game</button>
                 <button class="control-btn end-btn" onclick="confirmEndGame()" tabindex="11">🏠 End Game</button>
+                <div class="game-audio-row">
+                    <button class="audio-btn-game" id="gameMusicBtn" onclick="AudioManager.toggleMusic()" tabindex="12" title="Toggle Music">🎵</button>
+                    <button class="audio-btn-game" id="gameSfxBtn" onclick="AudioManager.toggleSFX()" tabindex="13" title="Toggle SFX">🔊</button>
+                </div>
             </div>
 
             <div class="panel-card debug-panel hidden" id="debugPanel">
@@ -980,9 +1047,434 @@
 
     <script>
     // =====================================================
+    // AUDIO MANAGER & MUSIC ENGINE
+    // =====================================================
+    const AudioManager = (() => {
+        let ctx = null;
+        let musicGain = null;
+        let sfxGain = null;
+        let musicMuted = localStorage.getItem('ludo_musicMuted') === 'true';
+        let sfxMuted = localStorage.getItem('ludo_sfxMuted') === 'true';
+
+        function init() {
+            if (ctx) return;
+            ctx = new (window.AudioContext || window.webkitAudioContext)();
+            musicGain = ctx.createGain();
+            sfxGain = ctx.createGain();
+            musicGain.connect(ctx.destination);
+            sfxGain.connect(ctx.destination);
+            musicGain.gain.value = musicMuted ? 0 : 0.7;
+            sfxGain.gain.value = sfxMuted ? 0 : 0.35;
+        }
+
+        function ensureResumed() {
+            if (ctx && ctx.state === 'suspended') ctx.resume();
+        }
+
+        function toggleMusic() {
+            musicMuted = !musicMuted;
+            localStorage.setItem('ludo_musicMuted', musicMuted);
+            if (musicGain) musicGain.gain.value = musicMuted ? 0 : 0.7;
+            if (musicMuted) {
+                MusicEngine.stop();
+            } else if (!gameOver && document.getElementById('modeSelection').classList.contains('hidden')) {
+                MusicEngine.start();
+            }
+            updateMuteButtons();
+        }
+
+        function toggleSFX() {
+            sfxMuted = !sfxMuted;
+            localStorage.setItem('ludo_sfxMuted', sfxMuted);
+            if (sfxGain) sfxGain.gain.value = sfxMuted ? 0 : 0.35;
+            updateMuteButtons();
+        }
+
+        // Helper: play a tone through the SFX channel
+        function playTone(freq, type, start, dur, vol) {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = type;
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(vol * 0.4, start);
+            g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+            o.connect(g);
+            g.connect(sfxGain);
+            o.start(start);
+            o.stop(start + dur);
+        }
+
+        // --- SFX Methods ---
+
+        function sfxDiceRoll() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            for (let i = 0; i < 8; i++) {
+                playTone(800 - i * 60, 'square', now + i * 0.04, 0.05, 0.3);
+            }
+        }
+
+        function sfxStep() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            playTone(600 + Math.random() * 200, 'square', now, 0.06, 0.2);
+        }
+
+        function sfxRelease() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 E5 G5 C6
+            notes.forEach((f, i) => {
+                playTone(f, 'square', now + i * 0.08, 0.15, 0.35);
+            });
+        }
+
+        function sfxCapture() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            // Impact
+            const n = ctx.createBufferSource();
+            const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+            n.buffer = buf;
+            const ng = ctx.createGain();
+            ng.gain.setValueAtTime(0.3, now);
+            ng.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+            n.connect(ng);
+            ng.connect(sfxGain);
+            n.start(now);
+            // Descending squeal
+            for (let i = 0; i < 6; i++) {
+                playTone(1200 - i * 150, 'sawtooth', now + 0.05 + i * 0.04, 0.06, 0.25);
+            }
+        }
+
+        function sfxReachHome() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            // Fanfare C5-E5-G5-C6
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((f, i) => {
+                playTone(f, 'square', now + i * 0.12, 0.2, 0.35);
+            });
+            // Sparkle
+            for (let i = 0; i < 5; i++) {
+                playTone(2000 + Math.random() * 1000, 'sine', now + 0.5 + i * 0.06, 0.08, 0.15);
+            }
+        }
+
+        function sfxBonus() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            playTone(880, 'square', now, 0.1, 0.3); // A5
+            playTone(1046.50, 'square', now + 0.1, 0.15, 0.35); // C6
+        }
+
+        function sfxWinner() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            // Extended fanfare
+            const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50, 1318.51];
+            notes.forEach((f, i) => {
+                playTone(f, 'square', now + i * 0.15, 0.25, 0.35);
+            });
+            // Final chord (C major)
+            [523.25, 659.25, 783.99, 1046.50].forEach(f => {
+                playTone(f, 'sine', now + 1.1, 0.8, 0.2);
+            });
+        }
+
+        function sfxFinalResults() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            // Drum roll
+            for (let i = 0; i < 12; i++) {
+                const n = ctx.createBufferSource();
+                const buf = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
+                const d = buf.getChannelData(0);
+                for (let j = 0; j < d.length; j++) d[j] = (Math.random() * 2 - 1) * (1 - j / d.length);
+                n.buffer = buf;
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0.15 + i * 0.015, now + i * 0.08);
+                g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.05);
+                n.connect(g);
+                g.connect(sfxGain);
+                n.start(now + i * 0.08);
+            }
+            // Then winner fanfare
+            setTimeout(() => sfxWinner(), 1000);
+        }
+
+        function sfxPenalty() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            // Descending sad horn
+            const notes = [400, 350, 300, 250];
+            notes.forEach((f, i) => {
+                playTone(f, 'sawtooth', now + i * 0.2, 0.25, 0.3);
+            });
+        }
+
+        function sfxNoMoves() {
+            if (!ctx || sfxMuted) return;
+            ensureResumed();
+            const now = ctx.currentTime;
+            playTone(150, 'square', now, 0.12, 0.3);
+            playTone(150, 'square', now + 0.18, 0.12, 0.3);
+        }
+
+        return {
+            init, ensureResumed, toggleMusic, toggleSFX,
+            get ctx() { return ctx; },
+            get musicGain() { return musicGain; },
+            get musicMuted() { return musicMuted; },
+            get sfxMuted() { return sfxMuted; },
+            sfxDiceRoll, sfxStep, sfxRelease, sfxCapture,
+            sfxReachHome, sfxBonus, sfxWinner, sfxFinalResults,
+            sfxPenalty, sfxNoMoves
+        };
+    })();
+
+    // =====================================================
+    // MUSIC ENGINE — Lush energetic chip-tune
+    // =====================================================
+    const MusicEngine = (() => {
+        let playing = false;
+        let timerId = null;
+        let nextNoteTime = 0;
+        let currentBeat = 0;
+
+        const BPM = 138;
+        const beatDur = 60 / BPM;
+        const eighth = beatDur / 2;
+
+        // 32-beat loop (8 bars of 4/4 at eighth-note resolution)
+        // Chord progression: C - Am - F - G  |  C - Am - Dm - G
+        // Each chord lasts 8 eighth-notes (1 bar)
+
+        // Note frequencies
+        const N = {
+            C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+            C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+            C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
+            C6:1046.50, D6:1174.66, E6:1318.51
+        };
+
+        // Chords per bar (each bar = 8 eighth notes)
+        const chords = [
+            [N.C4, N.E4, N.G4],       // C major
+            [N.A3, N.C4, N.E4],       // A minor
+            [N.F3, N.A3, N.C4],       // F major
+            [N.G3, N.B3, N.D4],       // G major
+            [N.C4, N.E4, N.G4],       // C major
+            [N.A3, N.C4, N.E4],       // A minor
+            [N.D4, N.F4, N.A4],       // D minor
+            [N.G3, N.B3, N.D4],       // G major
+        ];
+
+        // Bass root per bar (one octave below chord root)
+        const bassRoots = [
+            N.C3, N.A3 * 0.5, N.F3 * 0.5, N.G3 * 0.5,
+            N.C3, N.A3 * 0.5, N.D3, N.G3 * 0.5
+        ];
+
+        // Melody line — 64 eighth-note slots (one per eighth across 8 bars)
+        // 0 = rest
+        const melody = [
+            // Bar 1 (C): uplifting opening
+            N.E5, N.G5, N.C6, 0, N.B5, N.G5, N.A5, N.G5,
+            // Bar 2 (Am): answer phrase
+            N.A5, N.E5, N.C5, N.E5, N.A5, 0, N.G5, N.E5,
+            // Bar 3 (F): building
+            N.F5, N.A5, N.C6, N.A5, N.G5, N.F5, N.E5, N.F5,
+            // Bar 4 (G): tension
+            N.G5, N.B5, N.D6, 0, N.C6, N.B5, N.A5, N.G5,
+            // Bar 5 (C): joyful reprise
+            N.C6, 0, N.E6, N.D6, N.C6, N.G5, N.A5, N.B5,
+            // Bar 6 (Am): playful descent
+            N.C6, N.A5, N.E5, N.A5, N.G5, N.E5, N.C5, N.E5,
+            // Bar 7 (Dm): yearning
+            N.D5, N.F5, N.A5, N.D6, N.C6, N.A5, N.F5, N.A5,
+            // Bar 8 (G): resolve back
+            N.G5, N.B5, N.D6, N.C6, N.B5, N.A5, N.G5, 0,
+        ];
+
+        // Arpeggio pattern per beat within a bar (index into chord array 0-2, cycling)
+        const arpPattern = [0, 1, 2, 1, 0, 2, 1, 2];
+
+        const totalEighths = 64; // 8 bars * 8 eighths
+
+        function osc(type, freq, t, dur, vol, dest) {
+            const ctx = AudioManager.ctx;
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = type;
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            o.connect(g);
+            g.connect(dest);
+            o.start(t);
+            o.stop(t + dur + 0.02);
+        }
+
+        function noise(t, dur, vol, dest) {
+            const ctx = AudioManager.ctx;
+            const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+            const d = buf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            src.connect(g);
+            g.connect(dest);
+            src.start(t);
+        }
+
+        function scheduleEighth() {
+            const ctx = AudioManager.ctx;
+            const dest = AudioManager.musicGain;
+            if (!ctx || !dest) return;
+
+            const t = nextNoteTime;
+            const bar = Math.floor(currentBeat / 8);
+            const posInBar = currentBeat % 8;
+            const chord = chords[bar];
+            const bassRoot = bassRoots[bar];
+
+            // --- MELODY (lead) — pulse wave via detuned square pair ---
+            const melNote = melody[currentBeat];
+            if (melNote > 0) {
+                const dur = eighth * 0.85;
+                // Main voice
+                osc('square', melNote, t, dur, 0.07, dest);
+                // Detuned shimmer for richness
+                osc('sine', melNote * 1.002, t, dur * 0.9, 0.04, dest);
+                // Sub-octave body
+                osc('triangle', melNote * 0.5, t, dur * 0.6, 0.025, dest);
+            }
+
+            // --- CHORDS — soft pad (played as sustained arpeggiated tones) ---
+            if (posInBar % 2 === 0) {
+                const chordDur = eighth * 1.8;
+                chord.forEach((f, i) => {
+                    // Stagger chord tones slightly for lush spread
+                    osc('sine', f, t + i * 0.008, chordDur, 0.04, dest);
+                    osc('triangle', f, t + i * 0.008, chordDur * 0.7, 0.02, dest);
+                });
+            }
+
+            // --- ARPEGGIO layer — sparkly high register ---
+            const arpIdx = arpPattern[posInBar];
+            const arpFreq = chord[arpIdx] * 2; // one octave up
+            osc('sine', arpFreq, t, eighth * 0.4, 0.025, dest);
+
+            // --- BASS — warm triangle + sine sub ---
+            if (posInBar === 0 || posInBar === 4) {
+                // Root bass on beats 1 and 3
+                const bassDur = eighth * 3.5;
+                osc('triangle', bassRoot, t, bassDur, 0.12, dest);
+                osc('sine', bassRoot, t, bassDur * 0.8, 0.08, dest);
+            } else if (posInBar === 3 || posInBar === 7) {
+                // Octave ghost note for groove
+                osc('triangle', bassRoot * 2, t, eighth * 0.5, 0.05, dest);
+            }
+
+            // --- DRUMS ---
+            // Kick: beats 1 and 3 (posInBar 0, 4)
+            if (posInBar === 0 || posInBar === 4) {
+                const oK = ctx.createOscillator();
+                const gK = ctx.createGain();
+                oK.type = 'sine';
+                oK.frequency.setValueAtTime(160, t);
+                oK.frequency.exponentialRampToValueAtTime(35, t + 0.12);
+                gK.gain.setValueAtTime(0.18, t);
+                gK.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                oK.connect(gK);
+                gK.connect(dest);
+                oK.start(t);
+                oK.stop(t + 0.2);
+            }
+
+            // Snare: beats 2 and 4 (posInBar 2, 6)
+            if (posInBar === 2 || posInBar === 6) {
+                noise(t, 0.1, 0.09, dest);
+                osc('triangle', 200, t, 0.05, 0.06, dest);
+            }
+
+            // Hi-hat: every eighth note
+            noise(t, 0.03, 0.04, dest);
+
+            // Open hi-hat on off-beats for energy
+            if (posInBar % 2 === 1) {
+                noise(t, 0.06, 0.03, dest);
+            }
+
+            currentBeat = (currentBeat + 1) % totalEighths;
+            nextNoteTime += eighth;
+        }
+
+        function scheduler() {
+            const ctx = AudioManager.ctx;
+            if (!ctx || !playing) return;
+            while (nextNoteTime < ctx.currentTime + 0.15) {
+                scheduleEighth();
+            }
+            timerId = setTimeout(scheduler, 40);
+        }
+
+        function start() {
+            if (playing || AudioManager.musicMuted) return;
+            const ctx = AudioManager.ctx;
+            if (!ctx) return;
+            AudioManager.ensureResumed();
+            playing = true;
+            currentBeat = 0;
+            nextNoteTime = ctx.currentTime + 0.05;
+            scheduler();
+        }
+
+        function stop() {
+            playing = false;
+            if (timerId) { clearTimeout(timerId); timerId = null; }
+        }
+
+        return { start, stop, get playing() { return playing; } };
+    })();
+
+    function updateMuteButtons() {
+        const mm = AudioManager.musicMuted;
+        const sm = AudioManager.sfxMuted;
+        // Home buttons
+        const hm = document.getElementById('homeMusicBtn');
+        const hs = document.getElementById('homeSfxBtn');
+        if (hm) { hm.textContent = mm ? '🎵 Music Off' : '🎵 Music On'; hm.classList.toggle('muted', mm); }
+        if (hs) { hs.textContent = sm ? '🔇 SFX Off' : '🔊 SFX On'; hs.classList.toggle('muted', sm); }
+        // In-game buttons
+        const gm = document.getElementById('gameMusicBtn');
+        const gs = document.getElementById('gameSfxBtn');
+        if (gm) { gm.textContent = mm ? '🔇' : '🎵'; gm.classList.toggle('muted', mm); }
+        if (gs) { gs.textContent = sm ? '🔇' : '🔊'; gs.classList.toggle('muted', sm); }
+    }
+
+    // =====================================================
     // SANJS LUDO
     // =====================================================
-    
+
     const COLORS = ['red', 'green', 'yellow', 'blue'];
     const COLOR_NAMES = { red: 'Red', green: 'Green', yellow: 'Yellow', blue: 'Blue' };
     const TEAMS = { red: 1, yellow: 1, green: 2, blue: 2 };
@@ -1160,6 +1652,11 @@
         updateUI();
         renderTokens();
         setMessage(`${players[0].name}'s turn - tap dice!`);
+
+        // Init audio and start music
+        AudioManager.init();
+        AudioManager.ensureResumed();
+        MusicEngine.start();
 
         // Show/hide debug panel
         if (debugMode) {
@@ -1647,6 +2144,7 @@
 
     function doRoll() {
         canRoll = false;
+        AudioManager.sfxDiceRoll();
         clearCaptureIndicators();
         const currentColor = players[currentPlayerIdx].color;
         
@@ -1678,6 +2176,7 @@
                 
                 if (consecutiveSixes >= 3) {
                     setMessage('Three 6s! Turn lost.');
+                    AudioManager.sfxPenalty();
                     consecutiveSixes = 0;
                     setTimeout(() => nextTurn(), 1000);
                     return;
@@ -1690,6 +2189,7 @@
             const moves = getValidMoves();
             if (moves.length === 0) {
                 setMessage(`Rolled ${diceValue}. No moves!`);
+                AudioManager.sfxNoMoves();
                 if (diceValue === 6) {
                     const player = players[currentPlayerIdx];
                     const allInHomeStretch = player.tokens.every(t => t.pos === 57 || (t.pos >= 51 && t.pos <= 55));
@@ -1907,6 +2407,7 @@
         const token = player.tokens[move.tokenIdx];
 
         if (move.type === 'enter') {
+            AudioManager.sfxRelease();
             animateSteps(player, move.tokenIdx, -1, 0, () => {
                 token.pos = 0;
                 setMessage(`${player.name} enters!`);
@@ -1927,6 +2428,7 @@
                     reachedHome = true;
                     token.pos = 57; // Mark as finished (57 = done)
                     player.finished++;
+                    AudioManager.sfxReachHome();
                     setMessage(`${player.name} home! (${player.finished}/4)`);
 
                     if (player.finished === 4) {
@@ -1996,7 +2498,7 @@
         }
 
         let tokenEl = document.querySelector(`.token[data-player="${pIdx}"][data-token="${tokenIdx}"]`);
-        
+
         if (!tokenEl) {
             const spawn = HOME_SPAWNS[player.color][tokenIdx];
             const spawnCell = document.getElementById(`cell-${spawn[0]}-${spawn[1]}`);
@@ -2006,7 +2508,33 @@
             tokenEl.dataset.token = tokenIdx;
             spawnCell.appendChild(tokenEl);
         }
-        
+
+        // If this token was hidden (part of a same-color stack), make it visible
+        tokenEl.style.display = '';
+
+        // Clear any stack count text — this token is moving solo
+        tokenEl.textContent = '';
+
+        // Update the source cell: if the visible stack-count token is leaving,
+        // re-render remaining tokens in that cell to fix the count display.
+        const sourceCell = tokenEl.parentElement;
+        if (sourceCell) {
+            const siblingsOfSameColor = sourceCell.querySelectorAll(
+                `.token[data-player="${pIdx}"].token-${player.color}`
+            );
+            // If there are other same-color tokens in this cell, fix their display
+            const remaining = Array.from(siblingsOfSameColor).filter(el => el !== tokenEl);
+            if (remaining.length > 0) {
+                // Make the first remaining token visible with updated count
+                remaining[0].style.display = '';
+                remaining[0].textContent = remaining.length > 1 ? remaining.length : '';
+                // Keep the rest hidden
+                for (let i = 1; i < remaining.length; i++) {
+                    remaining[i].style.display = 'none';
+                }
+            }
+        }
+
         // Remove stack classes and make token full size for animation
         tokenEl.classList.remove('stack-0', 'stack-1', 'stack-2', 'stack-3');
         tokenEl.style.transform = 'scale(1)';
@@ -2028,6 +2556,7 @@
 
             if (targetCell && tokenEl.parentElement !== targetCell) {
                 targetCell.appendChild(tokenEl);
+                AudioManager.sfxStep();
             }
 
             // Dynamic scale: shrink when other tokens occupy the cell
@@ -2058,6 +2587,7 @@
         const getBonusRoll = rolledSix || captured || reachedHome;
 
         if (getBonusRoll) {
+            AudioManager.sfxBonus();
             if ((captured || reachedHome) && !rolledSix) {
                 gotBonusFromCapture = true;
                 setMessage(getMessage() + ' Bonus!');
@@ -2113,8 +2643,9 @@
         const victim = candidates[0];
         
         victim.token.pos = -1;
+        AudioManager.sfxCapture();
         setMessage(`${player.name} captures!`);
-        
+
         return true;
     }
 
@@ -2273,18 +2804,28 @@
                         cell.appendChild(tokenEl);
                     });
                 } else if (count >= 2) {
-                    // Multiple tokens of same color - show one token with count
-                    const t = colorTokens[0];
-                    const tokenEl = document.createElement('div');
-                    tokenEl.className = `token token-${t.color}`;
-                    tokenEl.dataset.player = t.pIdx;
-                    tokenEl.dataset.token = t.tIdx;
-                    tokenEl.textContent = count;
+                    // Multiple tokens of same color — create element for each
+                    // so animation can find any by data-token. First one shows count.
+                    colorTokens.forEach((t, idx) => {
+                        const tokenEl = document.createElement('div');
+                        tokenEl.className = `token token-${t.color}`;
+                        tokenEl.dataset.player = t.pIdx;
+                        tokenEl.dataset.token = t.tIdx;
+                        if (idx === 0) {
+                            tokenEl.textContent = count;
+                            if (Object.keys(byColor).length > 1) {
+                                tokenEl.classList.add(`stack-${stackIdx % 4}`);
+                            }
+                            cell.appendChild(tokenEl);
+                        } else {
+                            // Hidden but present in DOM for querySelector
+                            tokenEl.style.display = 'none';
+                            cell.appendChild(tokenEl);
+                        }
+                    });
                     if (Object.keys(byColor).length > 1) {
-                        tokenEl.classList.add(`stack-${stackIdx % 4}`);
                         stackIdx++;
                     }
-                    cell.appendChild(tokenEl);
                 } else {
                     // Single token - no count
                     const t = colorTokens[0];
@@ -2361,8 +2902,9 @@
 
     function endGame() {
         gameOver = true;
+        MusicEngine.stop();
         updateActiveDice();
-        
+
         // Assign finish positions to remaining players
         players.forEach((p, idx) => {
             if (p.isDisabled) return;
@@ -2413,10 +2955,16 @@
         document.getElementById('winnerText').textContent = winnerText;
         document.getElementById('winnerSubtext').textContent = subText;
         document.getElementById('winnerDetails').innerHTML = detailsHTML;
+        if (isTeamMode) {
+            AudioManager.sfxFinalResults();
+        } else {
+            AudioManager.sfxWinner();
+        }
         document.getElementById('winnerModal').classList.add('show');
     }
 
     function resetGame() {
+        MusicEngine.stop();
         debugMode = false;
         debugForceDice = 0;
         debugScenarioName = '';
@@ -2477,6 +3025,7 @@
             '🏠',
             () => {
                 // Reset everything and go to home
+                MusicEngine.stop();
                 gameOver = true;
                 debugMode = false;
                 debugForceDice = 0;
@@ -2552,6 +3101,83 @@
                 players[3].tokens[0].pos = 3;
                 break;
             }
+            case 'stack2sameCell': {
+                debugScenarioName = '2 Same-Color Stacked';
+                debugForceDice = 3;
+                // Red T0 and T1 both at pos 10 (same cell, should show "2")
+                // Roll 3 → one should move to pos 13, other stays at 10
+                players[0].tokens[0].pos = 10;
+                players[0].tokens[1].pos = 10;
+                break;
+            }
+            case 'stack3sameCell': {
+                debugScenarioName = '3 Same-Color Stacked';
+                debugForceDice = 2;
+                // Red T0, T1, T2 all at pos 20 (should show "3")
+                // Roll 2 → pick one to move to 22, cell shows "2"
+                players[0].tokens[0].pos = 20;
+                players[0].tokens[1].pos = 20;
+                players[0].tokens[2].pos = 20;
+                break;
+            }
+            case 'stack4sameCell': {
+                debugScenarioName = '4 Same-Color Stacked';
+                debugForceDice = 6;
+                // All 4 red tokens at start cell pos 0 (should show "4")
+                // Roll 6 → auto-move one to pos 6, cell drops to "3"
+                players[0].tokens[0].pos = 0;
+                players[0].tokens[1].pos = 0;
+                players[0].tokens[2].pos = 0;
+                players[0].tokens[3].pos = 0;
+                break;
+            }
+            case 'stackMixedColors': {
+                debugScenarioName = 'Same-Color Stack + Enemy';
+                debugForceDice = 3;
+                // Red T0 and T1 at pos 15 (stacked "2")
+                // Green T0 at the same board cell as red pos 18
+                // (red path[18] = [6,9], green path[5] = [6,9])
+                // Roll 3 → Red moves from 15 to 18, captures green
+                players[0].tokens[0].pos = 15;
+                players[0].tokens[1].pos = 15;
+                players[1].tokens[0].pos = 5;
+                break;
+            }
+            case 'stackSplitChoice': {
+                debugScenarioName = 'Split Stack: 2+2 Choose';
+                debugForceDice = 4;
+                // Red T0,T1 at pos 8 (stack of 2) and T2,T3 at pos 30 (stack of 2)
+                // Roll 4 → player must choose which stack to split
+                players[0].tokens[0].pos = 8;
+                players[0].tokens[1].pos = 8;
+                players[0].tokens[2].pos = 30;
+                players[0].tokens[3].pos = 30;
+                break;
+            }
+            case 'stack2v2sameEnemy': {
+                debugScenarioName = '2 Red + 2 Green same cell';
+                debugForceDice = 3;
+                // Cell [8,5]: red pos 44, green pos 31
+                // 2 red tokens and 2 green tokens all on [8,5]
+                // Roll 3 → red moves one to pos 47, should see stacked display update
+                players[0].tokens[0].pos = 44;
+                players[0].tokens[1].pos = 44;
+                players[1].tokens[0].pos = 31;
+                players[1].tokens[1].pos = 31;
+                break;
+            }
+            case 'stack2v2diffEnemy': {
+                debugScenarioName = '2 Red + Green + Blue same cell';
+                debugForceDice = 2;
+                // Cell [10,8]: red pos 32, green pos 19, blue pos 45
+                // 2 red stacked + 1 green + 1 blue all on same cell
+                // Roll 2 → red moves one to pos 34, 3 colors remain on cell
+                players[0].tokens[0].pos = 32;
+                players[0].tokens[1].pos = 32;
+                players[1].tokens[0].pos = 19;
+                players[3].tokens[0].pos = 45;
+                break;
+            }
         }
 
         // Update UI with scenario state
@@ -2574,6 +3200,7 @@
         updateUI();
         renderTokens();
         setupHomeScreenNavigation();
+        updateMuteButtons();
     };
     </script>
 </body>
