@@ -390,10 +390,36 @@
             box-shadow: 0 0 8px rgba(255,215,0,0.6), 0 2px 4px rgba(0,0,0,0.3);
         }
 
-        .token.selectable.stack-0:hover,
-        .token.selectable.stack-1:hover,
-        .token.selectable.stack-2:hover,
-        .token.selectable.stack-3:hover { transform: scale(0.7); z-index: 50; }
+        .token.selectable.stack-0 {
+            animation: token-glow-stacked 0.6s ease-in-out infinite alternate;
+            transform: translate(-25%, -25%) scale(0.55);
+            z-index: 11;
+        }
+        .token.selectable.stack-1 {
+            animation: token-glow-stacked 0.6s ease-in-out infinite alternate;
+            transform: translate(25%, -25%) scale(0.55);
+            z-index: 12;
+        }
+        .token.selectable.stack-2 {
+            animation: token-glow-stacked 0.6s ease-in-out infinite alternate;
+            transform: translate(-25%, 25%) scale(0.55);
+            z-index: 13;
+        }
+        .token.selectable.stack-3 {
+            animation: token-glow-stacked 0.6s ease-in-out infinite alternate;
+            transform: translate(25%, 25%) scale(0.55);
+            z-index: 14;
+        }
+
+        @keyframes token-glow-stacked {
+            from { box-shadow: 0 0 2px #FFD700, 0 2px 4px rgba(0,0,0,0.3); }
+            to { box-shadow: 0 0 5px #FFD700, 0 2px 6px rgba(0,0,0,0.4); }
+        }
+
+        .token.selectable.stack-0:hover { transform: translate(-25%, -28%) scale(0.55); z-index: 50; }
+        .token.selectable.stack-1:hover { transform: translate(25%, -28%) scale(0.55); z-index: 50; }
+        .token.selectable.stack-2:hover { transform: translate(-25%, 22%) scale(0.55); z-index: 50; }
+        .token.selectable.stack-3:hover { transform: translate(25%, 22%) scale(0.55); z-index: 50; }
 
         .side-panel {
             display: flex;
@@ -467,6 +493,77 @@
         .team-score-item { text-align: center; }
         .team-score-label { font-size: 0.65em; opacity: 0.7; }
         .team-score-value { font-size: 1em; font-weight: bold; }
+
+        /* Debug Mode Styles */
+        .debug-btn {
+            background: linear-gradient(135deg, #444, #222);
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin-top: 5px;
+            transition: all 0.2s;
+        }
+        .debug-btn:hover { background: linear-gradient(135deg, #555, #333); box-shadow: 0 0 8px rgba(0,255,0,0.4); }
+
+        .debug-menu {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            gap: 12px;
+        }
+        .debug-menu.hidden { display: none; }
+        .debug-menu h2 { color: #0f0; font-family: monospace; margin-bottom: 8px; }
+        .debug-menu button {
+            background: rgba(0,255,0,0.1);
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 0.9rem;
+            width: 280px;
+            transition: all 0.2s;
+        }
+        .debug-menu button:hover { background: rgba(0,255,0,0.25); }
+        .debug-menu .close-btn { background: rgba(255,0,0,0.15); color: #f66; border-color: #f66; margin-top: 10px; }
+        .debug-menu .close-btn:hover { background: rgba(255,0,0,0.3); }
+
+        .debug-panel {
+            background: rgba(0,255,0,0.05);
+            border: 1px solid rgba(0,255,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #0f0;
+        }
+        .debug-panel.hidden { display: none; }
+        .debug-panel .panel-title { color: #0f0; }
+        .debug-panel select {
+            background: #111;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 4px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin-top: 4px;
+            width: 100%;
+        }
+        .debug-panel .debug-scenario-label {
+            margin-top: 6px;
+            opacity: 0.7;
+            font-size: 0.7rem;
+        }
 
         .mode-selection {
             position: fixed;
@@ -788,6 +885,16 @@
         </div>
     </div>
 
+    <!-- Debug Menu Overlay -->
+    <div class="debug-menu hidden" id="debugMenu">
+        <h2>Debug Scenarios</h2>
+        <button onclick="loadDebugScenario('reachHome')">1. Reach Home Bonus</button>
+        <button onclick="loadDebugScenario('sixHomeStretch')">2. Six in Home Stretch</button>
+        <button onclick="loadDebugScenario('superposedHighlight')">3. Superposed Highlight</button>
+        <button onclick="loadDebugScenario('animationThrough')">4. Animation Through</button>
+        <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
+    </div>
+
     <div class="game-container">
         <div class="board-wrapper">
             <div class="board" id="board">
@@ -830,6 +937,21 @@
             <div class="panel-card game-controls">
                 <button class="control-btn reset-btn" onclick="confirmReset()" tabindex="10">🔄 Reset Game</button>
                 <button class="control-btn end-btn" onclick="confirmEndGame()" tabindex="11">🏠 End Game</button>
+            </div>
+
+            <div class="panel-card debug-panel hidden" id="debugPanel">
+                <div class="panel-title">Debug</div>
+                <div class="debug-scenario-label" id="debugScenarioLabel">--</div>
+                <label for="debugDiceSelect" style="margin-top:6px;display:block;">Force Dice:</label>
+                <select id="debugDiceSelect" onchange="setDebugDice(this.value)">
+                    <option value="0">Random</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                </select>
             </div>
         </div>
     </div>
@@ -972,6 +1094,9 @@
     let gameOver = false;
     let players = [];
     let isAnimating = false;
+    let debugMode = false;
+    let debugForceDice = 0;
+    let debugScenarioName = '';
 
     // =====================================================
     // INITIALIZATION
@@ -1035,7 +1160,16 @@
         updateUI();
         renderTokens();
         setMessage(`${players[0].name}'s turn - tap dice!`);
-        
+
+        // Show/hide debug panel
+        if (debugMode) {
+            document.getElementById('debugPanel').classList.remove('hidden');
+            document.getElementById('debugScenarioLabel').textContent = debugScenarioName || '--';
+            document.getElementById('debugDiceSelect').value = debugForceDice;
+        } else {
+            document.getElementById('debugPanel').classList.add('hidden');
+        }
+
         if (players[0].isAI) {
             setTimeout(doRoll, 700);
         }
@@ -1525,7 +1659,7 @@
         diceEl.classList.add('rolling');
         
         // Generate dice value (weighted or unweighted based on setting)
-        diceValue = useWeightedDice ? getWeightedDiceRoll() : (Math.floor(Math.random() * 6) + 1);
+        diceValue = (debugMode && debugForceDice > 0) ? debugForceDice : (useWeightedDice ? getWeightedDiceRoll() : (Math.floor(Math.random() * 6) + 1));
         diceValues[currentColor] = diceValue;
 
         setTimeout(() => {
@@ -1557,9 +1691,15 @@
             if (moves.length === 0) {
                 setMessage(`Rolled ${diceValue}. No moves!`);
                 if (diceValue === 6) {
-                    canRoll = true;
-                    updateActiveDice();
-                    if (players[currentPlayerIdx].isAI) setTimeout(doRoll, 700);
+                    const player = players[currentPlayerIdx];
+                    const allInHomeStretch = player.tokens.every(t => t.pos === 57 || (t.pos >= 51 && t.pos <= 55));
+                    if (allInHomeStretch) {
+                        setTimeout(() => nextTurn(), 1000);
+                    } else {
+                        canRoll = true;
+                        updateActiveDice();
+                        if (players[currentPlayerIdx].isAI) setTimeout(doRoll, 700);
+                    }
                 } else {
                     setTimeout(() => nextTurn(), 1000);
                 }
@@ -1781,8 +1921,10 @@
             animateSteps(player, move.tokenIdx, startPos, endPos, () => {
                 token.pos = endPos;
                 let captured = false;
-                
+                let reachedHome = false;
+
                 if (token.pos === 56) {
+                    reachedHome = true;
                     token.pos = 57; // Mark as finished (57 = done)
                     player.finished++;
                     setMessage(`${player.name} home! (${player.finished}/4)`);
@@ -1832,7 +1974,7 @@
                 }
 
                 renderTokens();
-                finishMove(captured);
+                finishMove(captured, reachedHome);
             });
         }
     }
@@ -1883,9 +2025,15 @@
 
             const [r, c] = steps[stepIndex];
             const targetCell = document.getElementById(`cell-${r}-${c}`);
-            
+
             if (targetCell && tokenEl.parentElement !== targetCell) {
                 targetCell.appendChild(tokenEl);
+            }
+
+            // Dynamic scale: shrink when other tokens occupy the cell
+            if (targetCell) {
+                const othersInCell = targetCell.querySelectorAll('.token:not([data-player="' + tokenEl.dataset.player + '"][data-token="' + tokenEl.dataset.token + '"])');
+                tokenEl.style.transform = othersInCell.length > 0 ? 'scale(0.7)' : 'scale(1)';
             }
 
             stepIndex++;
@@ -1901,16 +2049,16 @@
         }
     }
 
-    function finishMove(captured) {
+    function finishMove(captured, reachedHome) {
         isAnimating = false;
-        
+
         if (gameOver) return;
 
         const rolledSix = diceValue === 6;
-        const getBonusRoll = rolledSix || captured;
+        const getBonusRoll = rolledSix || captured || reachedHome;
 
         if (getBonusRoll) {
-            if (captured && !rolledSix) {
+            if ((captured || reachedHome) && !rolledSix) {
                 gotBonusFromCapture = true;
                 setMessage(getMessage() + ' Bonus!');
             } else {
@@ -2269,6 +2417,10 @@
     }
 
     function resetGame() {
+        debugMode = false;
+        debugForceDice = 0;
+        debugScenarioName = '';
+        document.getElementById('debugPanel').classList.add('hidden');
         document.getElementById('winnerModal').classList.remove('show');
         document.getElementById('modeSelection').classList.remove('hidden');
         setupHomeScreenNavigation();
@@ -2326,11 +2478,89 @@
             () => {
                 // Reset everything and go to home
                 gameOver = true;
+                debugMode = false;
+                debugForceDice = 0;
+                debugScenarioName = '';
+                document.getElementById('debugPanel').classList.add('hidden');
                 document.getElementById('winnerModal').classList.remove('show');
                 document.getElementById('modeSelection').classList.remove('hidden');
                 setupHomeScreenNavigation();
             }
         );
+    }
+
+    // =====================================================
+    // DEBUG MODE
+    // =====================================================
+    function openDebugMenu() {
+        document.getElementById('debugMenu').classList.remove('hidden');
+    }
+
+    function closeDebugMenu() {
+        document.getElementById('debugMenu').classList.add('hidden');
+    }
+
+    function setDebugDice(val) {
+        debugForceDice = parseInt(val) || 0;
+    }
+
+    function loadDebugScenario(scenario) {
+        closeDebugMenu();
+        debugMode = true;
+
+        // Start a PvP game as the base
+        startGame('pvp');
+
+        switch (scenario) {
+            case 'reachHome': {
+                debugScenarioName = 'Reach Home Bonus';
+                debugForceDice = 1;
+                // Red T0 at pos 55 (one step from home)
+                players[0].tokens[0].pos = 55;
+                break;
+            }
+            case 'sixHomeStretch': {
+                debugScenarioName = 'Six in Home Stretch';
+                debugForceDice = 6;
+                // Red T0-T3 at pos 51-54 (all in home stretch)
+                players[0].tokens[0].pos = 51;
+                players[0].tokens[1].pos = 52;
+                players[0].tokens[2].pos = 53;
+                players[0].tokens[3].pos = 54;
+                break;
+            }
+            case 'superposedHighlight': {
+                debugScenarioName = 'Superposed Highlight';
+                debugForceDice = 2;
+                // Red T0 at [8,5] = red pos 44, Red T1 at [0,6] = red pos 10
+                players[0].tokens[0].pos = 44;
+                players[0].tokens[1].pos = 10;
+                // Green T0 at [8,5] = green pos 31
+                players[1].tokens[0].pos = 31;
+                // Blue T0 at [8,5] = blue pos 5
+                players[3].tokens[0].pos = 5;
+                break;
+            }
+            case 'animationThrough': {
+                debugScenarioName = 'Animation Through';
+                debugForceDice = 4;
+                // Red T0 at [12,6] = red pos 40
+                players[0].tokens[0].pos = 40;
+                // Green T0 at [10,6] = green pos 29
+                players[1].tokens[0].pos = 29;
+                // Blue T0 at [10,6] = blue pos 3
+                players[3].tokens[0].pos = 3;
+                break;
+            }
+        }
+
+        // Update UI with scenario state
+        document.getElementById('debugPanel').classList.remove('hidden');
+        document.getElementById('debugScenarioLabel').textContent = debugScenarioName;
+        document.getElementById('debugDiceSelect').value = debugForceDice;
+        renderTokens();
+        updateUI();
+        setMessage(`Debug: ${debugScenarioName} — tap dice!`);
     }
 
     // =====================================================
