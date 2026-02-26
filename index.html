@@ -649,7 +649,7 @@
 
         .option-hint {
             font-size: 0.75em;
-            opacity: 0.6;
+            color: rgba(255,255,255,0.6);
             margin-left: 30px;
             margin-top: 4px;
         }
@@ -879,6 +879,25 @@
             .mode-btn .icon { font-size: 1.5rem; }
             .mode-btn .sub { font-size: 0.55em; }
         }
+        /* Turn Timer Bar */
+        .timer-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .timer-bar {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #4CAF50, #FFD700);
+            border-radius: 3px;
+            transition: width 0.1s linear;
+        }
+        .timer-bar.urgent {
+            background: linear-gradient(90deg, #f44336, #ff5722);
+        }
     </style>
 </head>
 <body>
@@ -934,6 +953,16 @@
                 <label for="useWeightedDice">Lucky dice</label>
             </div>
             <div class="option-hint">Higher chance of rolling capture numbers</div>
+            <div class="option-row">
+                <input type="checkbox" id="turnTimer" tabindex="10">
+                <label for="turnTimer">Turn timer (30s)</label>
+            </div>
+            <div class="option-hint">Must move within 30 seconds or lose your best piece</div>
+            <div class="option-row">
+                <input type="checkbox" id="teamCoop" tabindex="11">
+                <label for="teamCoop">Team cooperation</label>
+            </div>
+            <div class="option-hint">Move teammate's pieces with your rolls (team modes only)</div>
         </div>
         <div class="audio-controls">
             <button class="audio-btn" id="homeMusicBtn" onclick="AudioManager.toggleMusic()">🎵 Music On</button>
@@ -955,6 +984,9 @@
         <button onclick="loadDebugScenario('stackSplitChoice')">9. Split Stack: 2+2 Choose Which</button>
         <button onclick="loadDebugScenario('stack2v2sameEnemy')">10. 2 Red + 2 Green on same cell</button>
         <button onclick="loadDebugScenario('stack2v2diffEnemy')">11. 2 Red + Green + Blue on same cell</button>
+        <button onclick="loadDebugScenario('lastPieceHome')">12. Last piece reaches home (no bonus)</button>
+        <button onclick="loadDebugScenario('timerExpiry')">13. Timer Expiry (30s penalty)</button>
+        <button onclick="loadDebugScenario('teamCoop')">14. Team Coop (move teammate)</button>
         <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
     </div>
 
@@ -989,6 +1021,9 @@
             <div class="panel-card">
                 <div class="panel-title">Game Status</div>
                 <div class="message" id="message">Tap your dice to roll!</div>
+                <div class="timer-bar-container" id="timerBarContainer" style="display:none;">
+                    <div class="timer-bar" id="timerBar"></div>
+                </div>
             </div>
 
             <div class="panel-card">
@@ -1589,6 +1624,11 @@
     let debugMode = false;
     let debugForceDice = 0;
     let debugScenarioName = '';
+    let turnTimerEnabled = false;
+    let teamCoopEnabled = false;
+    let timerInterval = null;
+    let timerStartTime = 0;
+    const TURN_TIMER_DURATION = 30000;
 
     // =====================================================
     // INITIALIZATION
@@ -1613,7 +1653,9 @@
         releaseOnOne = document.getElementById('releaseOnOne').checked;
         showCaptureIndicator = document.getElementById('showCaptureIndicator').checked;
         useWeightedDice = document.getElementById('useWeightedDice').checked;
-        
+        turnTimerEnabled = document.getElementById('turnTimer').checked;
+        teamCoopEnabled = document.getElementById('teamCoop').checked && (mode === 'team' || mode === 'team-ai');
+
         initPlayers();
         
         if (mode === 'ai') {
@@ -1797,7 +1839,9 @@
         const checkboxes = [
             document.getElementById('releaseOnOne'),
             document.getElementById('showCaptureIndicator'),
-            document.getElementById('useWeightedDice')
+            document.getElementById('useWeightedDice'),
+            document.getElementById('turnTimer'),
+            document.getElementById('teamCoop')
         ];
         const currentFocus = document.activeElement;
         
@@ -1899,7 +1943,8 @@
         currentTokenIndex = -1;
         
         moves.forEach(move => {
-            const tokenEl = document.querySelector(`.token[data-player="${currentPlayerIdx}"][data-token="${move.tokenIdx}"]`);
+            const pIdx = move.playerIdx !== undefined ? move.playerIdx : currentPlayerIdx;
+            const tokenEl = document.querySelector(`.token[data-player="${pIdx}"][data-token="${move.tokenIdx}"]`);
             if (tokenEl) {
                 tokenEl.setAttribute('tabindex', '10');
                 tokenEl.dataset.moveType = move.type;
@@ -2142,6 +2187,76 @@
         doRoll();
     }
 
+    // =====================================================
+    // TURN TIMER
+    // =====================================================
+    function startTurnTimer() {
+        stopTurnTimer();
+        const container = document.getElementById('timerBarContainer');
+        const bar = document.getElementById('timerBar');
+        container.style.display = '';
+        bar.style.width = '100%';
+        bar.classList.remove('urgent');
+        timerStartTime = Date.now();
+        timerInterval = setInterval(updateTimerBar, 100);
+    }
+
+    function updateTimerBar() {
+        const elapsed = Date.now() - timerStartTime;
+        const remaining = TURN_TIMER_DURATION - elapsed;
+        const bar = document.getElementById('timerBar');
+        if (remaining <= 0) {
+            bar.style.width = '0%';
+            onTimerExpired();
+            return;
+        }
+        const pct = (remaining / TURN_TIMER_DURATION) * 100;
+        bar.style.width = pct + '%';
+        if (remaining < 10000) {
+            bar.classList.add('urgent');
+        } else {
+            bar.classList.remove('urgent');
+        }
+    }
+
+    function stopTurnTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        const container = document.getElementById('timerBarContainer');
+        const bar = document.getElementById('timerBar');
+        if (container) container.style.display = 'none';
+        if (bar) {
+            bar.style.width = '100%';
+            bar.classList.remove('urgent');
+        }
+    }
+
+    function onTimerExpired() {
+        stopTurnTimer();
+        clearHighlights();
+        const player = players[currentPlayerIdx];
+        // Find most advanced piece (highest pos, not finished at 57)
+        let bestIdx = -1;
+        let bestPos = -2;
+        player.tokens.forEach((token, idx) => {
+            if (token.pos >= 0 && token.pos !== 57 && token.pos > bestPos) {
+                bestPos = token.pos;
+                bestIdx = idx;
+            }
+        });
+        if (bestIdx >= 0) {
+            player.tokens[bestIdx].pos = -1;
+            AudioManager.sfxPenalty();
+            setMessage(`${player.name} timed out! Piece sent home.`);
+            renderTokens();
+        } else {
+            setMessage(`${player.name} timed out!`);
+        }
+        setTimeout(() => nextTurn(), 1000);
+    }
+
     function doRoll() {
         canRoll = false;
         AudioManager.sfxDiceRoll();
@@ -2217,7 +2332,10 @@
                 return;
             }
 
-            const uniquePositions = new Set(moves.map(m => players[currentPlayerIdx].tokens[m.tokenIdx].pos));
+            const uniquePositions = new Set(moves.map(m => {
+                const pIdx = m.playerIdx !== undefined ? m.playerIdx : currentPlayerIdx;
+                return `${pIdx}-${players[pIdx].tokens[m.tokenIdx].pos}`;
+            }));
             if (uniquePositions.size === 1) {
                 setMessage(`Rolled ${diceValue}. Auto-move...`);
                 setTimeout(() => executeMove(moves[0]), 400);
@@ -2229,6 +2347,8 @@
 
             if (players[currentPlayerIdx].isAI) {
                 setTimeout(() => aiMove(moves), 500);
+            } else if (turnTimerEnabled) {
+                startTurnTimer();
             }
         }, 600);
     }
@@ -2290,16 +2410,17 @@
     }
 
     function showCaptureIndicators(moves) {
-        const player = players[currentPlayerIdx];
-        const playerTeam = TEAMS[player.color];
         const captureCells = new Set();
 
         moves.forEach(move => {
+            const pIdx = move.playerIdx !== undefined ? move.playerIdx : currentPlayerIdx;
+            const movePlayer = players[pIdx];
+            const moveTeam = TEAMS[movePlayer.color];
             if (move.type === 'enter') {
-                const captureCell = checkCaptureAtPosition(player, 0, playerTeam);
+                const captureCell = checkCaptureAtPosition(movePlayer, 0, moveTeam);
                 if (captureCell) captureCells.add(captureCell);
             } else {
-                const captureCell = checkCaptureAtPosition(player, move.newPos, playerTeam);
+                const captureCell = checkCaptureAtPosition(movePlayer, move.newPos, moveTeam);
                 if (captureCell) captureCells.add(captureCell);
             }
         });
@@ -2341,6 +2462,36 @@
     }
 
     // =====================================================
+    // TEAM COOPERATION HELPERS
+    // =====================================================
+    function getTeammateIdx(idx) {
+        const myTeam = TEAMS[players[idx].color];
+        for (let i = 0; i < 4; i++) {
+            if (i !== idx && !players[i].isDisabled && TEAMS[players[i].color] === myTeam) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    function teammateHasTokensInPlay(idx) {
+        const tmIdx = getTeammateIdx(idx);
+        if (tmIdx === -1) return false;
+        return players[tmIdx].tokens.some(t => t.pos >= 0 && t.pos !== 57);
+    }
+
+    function shouldSkipPlayer(idx) {
+        const p = players[idx];
+        if (p.isDisabled) return true;
+        if (p.finished === 4) {
+            // In team coop, don't skip if teammate still has tokens to move
+            if (teamCoopEnabled && teammateHasTokensInPlay(idx)) return false;
+            return true;
+        }
+        return false;
+    }
+
+    // =====================================================
     // MOVE LOGIC
     // =====================================================
     function canRelease() {
@@ -2349,24 +2500,36 @@
         return false;
     }
 
-    function getValidMoves() {
-        const player = players[currentPlayerIdx];
+    function getMovesForPlayer(pIdx) {
+        const player = players[pIdx];
         const moves = [];
-
         player.tokens.forEach((token, idx) => {
             if (token.pos === 56) return;
-
             if (token.pos === -1) {
                 if (canRelease()) {
-                    moves.push({ tokenIdx: idx, type: 'enter' });
+                    moves.push({ tokenIdx: idx, type: 'enter', playerIdx: pIdx });
                 }
             } else {
                 const newPos = token.pos + diceValue;
                 if (newPos <= 56) {
-                    moves.push({ tokenIdx: idx, type: 'move', newPos });
+                    moves.push({ tokenIdx: idx, type: 'move', newPos, playerIdx: pIdx });
                 }
             }
         });
+        return moves;
+    }
+
+    function getValidMoves() {
+        const moves = getMovesForPlayer(currentPlayerIdx);
+
+        // Team cooperation: also get teammate's valid moves
+        if (isTeamMode && teamCoopEnabled) {
+            const tmIdx = getTeammateIdx(currentPlayerIdx);
+            if (tmIdx >= 0 && players[tmIdx].finished < 4) {
+                const tmMoves = getMovesForPlayer(tmIdx);
+                moves.push(...tmMoves);
+            }
+        }
 
         return moves;
     }
@@ -2374,13 +2537,14 @@
     function highlightTokens(moves) {
         clearHighlights();
         moves.forEach(move => {
-            const tokenEl = document.querySelector(`.token[data-player="${currentPlayerIdx}"][data-token="${move.tokenIdx}"]`);
+            const pIdx = move.playerIdx !== undefined ? move.playerIdx : currentPlayerIdx;
+            const tokenEl = document.querySelector(`.token[data-player="${pIdx}"][data-token="${move.tokenIdx}"]`);
             if (tokenEl) {
                 tokenEl.classList.add('selectable');
                 tokenEl.onclick = () => executeMove(move);
             }
         });
-        
+
         // Setup keyboard/remote navigation
         setupTokenNavigation(moves);
     }
@@ -2399,11 +2563,13 @@
     // ANIMATED MOVEMENT
     // =====================================================
     function executeMove(move) {
+        stopTurnTimer();
         clearHighlights();
         clearCaptureIndicators();
         isAnimating = true;
-        
-        const player = players[currentPlayerIdx];
+
+        const movePlayerIdx = move.playerIdx !== undefined ? move.playerIdx : currentPlayerIdx;
+        const player = players[movePlayerIdx];
         const token = player.tokens[move.tokenIdx];
 
         if (move.type === 'enter') {
@@ -2434,7 +2600,7 @@
                     if (player.finished === 4) {
                         player.finishPosition = finishOrder.length;
                         player.points = FINISH_POINTS[finishOrder.length];
-                        finishOrder.push(currentPlayerIdx);
+                        finishOrder.push(movePlayerIdx);
                         
                         updateUI();
                         
@@ -2583,6 +2749,15 @@
 
         if (gameOver) return;
 
+        // If this player just finished all 4 tokens, skip to next turn
+        // Unless team coop is on and teammate still needs help
+        if (players[currentPlayerIdx].finished === 4) {
+            if (!(teamCoopEnabled && teammateHasTokensInPlay(currentPlayerIdx))) {
+                setTimeout(() => nextTurn(), 300);
+                return;
+            }
+        }
+
         const rolledSix = diceValue === 6;
         const getBonusRoll = rolledSix || captured || reachedHome;
 
@@ -2612,11 +2787,12 @@
         if (SAFE_CELLS.has(cellKey)) return false;
 
         const playerTeam = TEAMS[player.color];
-        
+        const movingPIdx = players.indexOf(player);
+
         let candidates = [];
 
         players.forEach((other, pIdx) => {
-            if (pIdx === currentPlayerIdx) return;
+            if (pIdx === movingPIdx) return;
             if (isTeamMode && TEAMS[other.color] === playerTeam) return;
 
             other.tokens.forEach((otherToken, tIdx) => {
@@ -2656,12 +2832,17 @@
         let best = moves[0];
         let bestScore = -9999;
 
-        const player = players[currentPlayerIdx];
-        const playerTeam = TEAMS[player.color];
+        const playerTeam = TEAMS[players[currentPlayerIdx].color];
 
         moves.forEach(move => {
+            const pIdx = move.playerIdx !== undefined ? move.playerIdx : currentPlayerIdx;
+            const movePlayer = players[pIdx];
+            const token = movePlayer.tokens[move.tokenIdx];
+            const isTeammate = pIdx !== currentPlayerIdx;
             let score = Math.random() * 10;
-            const token = player.tokens[move.tokenIdx];
+
+            // Teammate moves get lower base priority
+            if (isTeammate) score -= 30;
 
             if (move.type === 'enter') {
                 score += 60;
@@ -2673,14 +2854,14 @@
                 } else if (newPos >= 51) {
                     score += 200 + newPos;
                 } else {
-                    const path = PATHS[player.color];
+                    const path = PATHS[movePlayer.color];
                     const [r, c] = path[newPos];
                     const cellKey = `${r}-${c}`;
 
-                    players.forEach((other, pIdx) => {
-                        if (pIdx === currentPlayerIdx) return;
+                    players.forEach((other, oIdx) => {
+                        if (oIdx === pIdx) return;
                         if (isTeamMode && TEAMS[other.color] === playerTeam) return;
-                        
+
                         other.tokens.forEach(ot => {
                             if (ot.pos >= 0 && ot.pos < 51) {
                                 const otherPath = PATHS[other.color];
@@ -2711,11 +2892,12 @@
     // TURNS
     // =====================================================
     function nextTurn() {
+        stopTurnTimer();
         let attempts = 0;
         do {
             currentPlayerIdx = (currentPlayerIdx + 1) % 4;
             attempts++;
-        } while ((players[currentPlayerIdx].finished === 4 || players[currentPlayerIdx].isDisabled) && attempts < 4);
+        } while ((shouldSkipPlayer(currentPlayerIdx)) && attempts < 4);
 
         if (attempts >= 4 || finishOrder.length >= (isDiagonalMode ? 2 : 4)) {
             endGame();
@@ -3176,6 +3358,39 @@
                 players[0].tokens[1].pos = 32;
                 players[1].tokens[0].pos = 19;
                 players[3].tokens[0].pos = 45;
+                break;
+            }
+            case 'lastPieceHome': {
+                debugScenarioName = 'Last Piece Home (no bonus roll)';
+                debugForceDice = 1;
+                // Red has 3 tokens finished, 4th is one step from home
+                // Roll 1 → token reaches home, player is done, should NOT get bonus
+                players[0].tokens[0].pos = 57; // finished
+                players[0].tokens[1].pos = 57; // finished
+                players[0].tokens[2].pos = 57; // finished
+                players[0].finished = 3;
+                players[0].tokens[3].pos = 55; // one step from home (pos 56 = home)
+                break;
+            }
+            case 'timerExpiry': {
+                debugScenarioName = 'Timer Expiry (30s penalty)';
+                debugForceDice = 3;
+                turnTimerEnabled = true;
+                // Red T0 at pos 10, T1 at pos 30 — wait 30s, T1 (most advanced) sent home
+                players[0].tokens[0].pos = 10;
+                players[0].tokens[1].pos = 30;
+                break;
+            }
+            case 'teamCoop': {
+                debugScenarioName = 'Team Coop (move teammate)';
+                debugForceDice = 4;
+                // Switch to team mode and enable coop
+                isTeamMode = true;
+                teamCoopEnabled = true;
+                // Red T0 at pos 40, Yellow (teammate) T0 at pos 20
+                // Both should be highlighted as selectable
+                players[0].tokens[0].pos = 40;
+                players[2].tokens[0].pos = 20; // Yellow is index 2
                 break;
             }
         }
