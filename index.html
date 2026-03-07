@@ -987,6 +987,7 @@
         <button onclick="loadDebugScenario('lastPieceHome')">12. Last piece reaches home (no bonus)</button>
         <button onclick="loadDebugScenario('timerExpiry')">13. Timer Expiry (30s penalty)</button>
         <button onclick="loadDebugScenario('teamCoop')">14. Team Coop (move teammate)</button>
+        <button onclick="loadDebugScenario('teamCoopCaged')">15. Team Coop: finished + caged teammate</button>
         <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
     </div>
 
@@ -2477,7 +2478,7 @@
     function teammateHasTokensInPlay(idx) {
         const tmIdx = getTeammateIdx(idx);
         if (tmIdx === -1) return false;
-        return players[tmIdx].tokens.some(t => t.pos >= 0 && t.pos !== 57);
+        return players[tmIdx].tokens.some(t => t.pos !== 57);
     }
 
     function shouldSkipPlayer(idx) {
@@ -3391,6 +3392,34 @@
                 // Both should be highlighted as selectable
                 players[0].tokens[0].pos = 40;
                 players[2].tokens[0].pos = 20; // Yellow is index 2
+                break;
+            }
+            case 'teamCoopCaged': {
+                debugScenarioName = 'Team Coop: finished + caged teammate';
+                debugForceDice = 6;
+                isTeamMode = true;
+                teamCoopEnabled = true;
+                // Red: all 4 finished
+                players[0].tokens.forEach(t => t.pos = 57);
+                players[0].finished = 4;
+                // Yellow (teammate): 3 finished, 1 in cage
+                players[2].tokens[0].pos = 57;
+                players[2].tokens[1].pos = 57;
+                players[2].tokens[2].pos = 57;
+                players[2].finished = 3;
+                players[2].tokens[3].pos = -1; // caged
+                // Green: all 4 finished
+                players[1].tokens.forEach(t => t.pos = 57);
+                players[1].finished = 4;
+                // Blue: 2 finished, 2 on board
+                players[3].tokens[0].pos = 57;
+                players[3].tokens[1].pos = 57;
+                players[3].finished = 2;
+                players[3].tokens[2].pos = 20;
+                players[3].tokens[3].pos = 35;
+                // Start on Red's turn — Red should NOT be skipped
+                // Red can roll 6 to release Yellow's caged token
+                currentPlayerIdx = 0;
                 break;
             }
         }
