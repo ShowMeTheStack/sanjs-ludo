@@ -898,37 +898,58 @@
         .timer-bar.urgent {
             background: linear-gradient(90deg, #f44336, #ff5722);
         }
-        /* Reroll Lifeline Button */
-        .reroll-btn {
+        /* Dice-area lifeline counters */
+        .dice-lifelines {
             position: absolute;
-            bottom: -2px;
-            right: -2px;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.8);
-            background: linear-gradient(135deg, #ff9800, #f57c00);
-            color: #fff;
-            font-size: 0.65rem;
-            font-weight: bold;
-            cursor: pointer;
-            pointer-events: auto;
             display: none;
+            pointer-events: none;
+            z-index: 22;
+            gap: 4px;
+        }
+        .dice-lifelines.visible { display: flex; }
+        /* Position per corner — counters sit just outside the dice toward board center */
+        .dice-overlay.red .dice-lifelines { bottom: -4px; right: -4px; flex-direction: row; }
+        .dice-overlay.green .dice-lifelines { bottom: -4px; left: -4px; flex-direction: row-reverse; }
+        .dice-overlay.yellow .dice-lifelines { top: -4px; left: -4px; flex-direction: row-reverse; }
+        .dice-overlay.blue .dice-lifelines { top: -4px; right: -4px; flex-direction: row; }
+        .dice-lifeline-counter {
+            min-width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 25;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-            transition: transform 0.15s;
+            font-weight: bold;
+            font-size: 0.85rem;
             line-height: 1;
+            pointer-events: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            padding: 0 5px;
+            gap: 3px;
         }
-        .reroll-btn:hover { transform: scale(1.15); }
-        .reroll-btn.visible { display: flex; }
-        .reroll-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
+        .dice-lifeline-counter.reroll {
+            background: linear-gradient(135deg, #ff9800, #e65100);
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            border: 2px solid rgba(255,255,255,0.6);
+        }
+        .dice-lifeline-counter.reroll:hover { transform: scale(1.12); box-shadow: 0 0 12px rgba(255,152,0,0.7); }
+        .dice-lifeline-counter.reroll.disabled {
+            opacity: 0.35;
+            cursor: default;
             transform: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
         }
-        /* Lifeline counters in player list */
+        .dice-lifeline-counter.shield {
+            background: linear-gradient(135deg, #42a5f5, #1565c0);
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.5);
+            cursor: default;
+        }
+        .dice-lifeline-counter .ll-icon { font-size: 0.75rem; }
+        .dice-lifeline-counter .ll-num { font-size: 0.9rem; }
+        /* Sidebar lifeline badges */
         .lifeline-badges {
             display: inline-flex;
             gap: 4px;
@@ -1052,6 +1073,9 @@
         <button onclick="loadDebugScenario('rerollOwn')">20. Reroll (own lifeline)</button>
         <button onclick="loadDebugScenario('rerollBorrowTeammate')">21. Reroll Borrowed from Teammate</button>
         <button onclick="loadDebugScenario('lifelinesNoCoop')">22. Lifelines without Coop (no sharing)</button>
+        <button onclick="loadDebugScenario('rerollNoMoves')">23. Reroll on No Moves (home stretch exact)</button>
+        <button onclick="loadDebugScenario('rerollNoMovesCaged')">24. Reroll on No Moves (all caged, need 6)</button>
+        <button onclick="loadDebugScenario('rerollNoMovesCoopBorrow')">25. Reroll No Moves (borrow from teammate)</button>
         <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
     </div>
 
@@ -1062,25 +1086,37 @@
                 <div class="dice-overlay red" id="dice-overlay-red">
                     <div class="dice-3d" id="dice-red" tabindex="1" onclick="onDiceClick('red')" onkeydown="onDiceKey(event, 'red')">
                         <div class="dice-face dice-face-red" id="dice-face-red"></div>
-                        <button class="reroll-btn" id="reroll-red" onclick="event.stopPropagation(); useReroll('red');" title="Reroll"></button>
+                    </div>
+                    <div class="dice-lifelines" id="lifelines-red">
+                        <div class="dice-lifeline-counter reroll" id="reroll-red" onclick="useReroll('red')" title="Reroll"><span class="ll-icon">&#x21bb;</span><span class="ll-num" id="reroll-num-red">5</span></div>
+                        <div class="dice-lifeline-counter shield" id="shield-red" title="Shields"><span class="ll-icon">&#x1f6e1;</span><span class="ll-num" id="shield-num-red">0</span></div>
                     </div>
                 </div>
                 <div class="dice-overlay green" id="dice-overlay-green">
                     <div class="dice-3d" id="dice-green" tabindex="2" onclick="onDiceClick('green')" onkeydown="onDiceKey(event, 'green')">
                         <div class="dice-face dice-face-green" id="dice-face-green"></div>
-                        <button class="reroll-btn" id="reroll-green" onclick="event.stopPropagation(); useReroll('green');" title="Reroll"></button>
+                    </div>
+                    <div class="dice-lifelines" id="lifelines-green">
+                        <div class="dice-lifeline-counter reroll" id="reroll-green" onclick="useReroll('green')" title="Reroll"><span class="ll-icon">&#x21bb;</span><span class="ll-num" id="reroll-num-green">5</span></div>
+                        <div class="dice-lifeline-counter shield" id="shield-green" title="Shields"><span class="ll-icon">&#x1f6e1;</span><span class="ll-num" id="shield-num-green">0</span></div>
                     </div>
                 </div>
                 <div class="dice-overlay yellow" id="dice-overlay-yellow">
                     <div class="dice-3d" id="dice-yellow" tabindex="3" onclick="onDiceClick('yellow')" onkeydown="onDiceKey(event, 'yellow')">
                         <div class="dice-face dice-face-yellow" id="dice-face-yellow"></div>
-                        <button class="reroll-btn" id="reroll-yellow" onclick="event.stopPropagation(); useReroll('yellow');" title="Reroll"></button>
+                    </div>
+                    <div class="dice-lifelines" id="lifelines-yellow">
+                        <div class="dice-lifeline-counter reroll" id="reroll-yellow" onclick="useReroll('yellow')" title="Reroll"><span class="ll-icon">&#x21bb;</span><span class="ll-num" id="reroll-num-yellow">5</span></div>
+                        <div class="dice-lifeline-counter shield" id="shield-yellow" title="Shields"><span class="ll-icon">&#x1f6e1;</span><span class="ll-num" id="shield-num-yellow">0</span></div>
                     </div>
                 </div>
                 <div class="dice-overlay blue" id="dice-overlay-blue">
                     <div class="dice-3d" id="dice-blue" tabindex="4" onclick="onDiceClick('blue')" onkeydown="onDiceKey(event, 'blue')">
                         <div class="dice-face dice-face-blue" id="dice-face-blue"></div>
-                        <button class="reroll-btn" id="reroll-blue" onclick="event.stopPropagation(); useReroll('blue');" title="Reroll"></button>
+                    </div>
+                    <div class="dice-lifelines" id="lifelines-blue">
+                        <div class="dice-lifeline-counter reroll" id="reroll-blue" onclick="useReroll('blue')" title="Reroll"><span class="ll-icon">&#x21bb;</span><span class="ll-num" id="reroll-num-blue">5</span></div>
+                        <div class="dice-lifeline-counter shield" id="shield-blue" title="Shields"><span class="ll-icon">&#x1f6e1;</span><span class="ll-num" id="shield-num-blue">0</span></div>
                     </div>
                 </div>
             </div>
@@ -1700,6 +1736,9 @@
     let timerInterval = null;
     let timerStartTime = 0;
     const TURN_TIMER_DURATION = 30000;
+    const REROLL_TIMER_DURATION = 10000;
+    let activeTimerDuration = TURN_TIMER_DURATION;
+    let rerollTimerMode = false; // true = 10s reroll-on-no-moves timer
 
     // =====================================================
     // INITIALIZATION
@@ -2266,8 +2305,10 @@
     // =====================================================
     // TURN TIMER
     // =====================================================
-    function startTurnTimer() {
+    function startTurnTimer(duration) {
         stopTurnTimer();
+        activeTimerDuration = duration || TURN_TIMER_DURATION;
+        rerollTimerMode = (activeTimerDuration === REROLL_TIMER_DURATION);
         const container = document.getElementById('timerBarContainer');
         const bar = document.getElementById('timerBar');
         container.style.display = '';
@@ -2279,16 +2320,17 @@
 
     function updateTimerBar() {
         const elapsed = Date.now() - timerStartTime;
-        const remaining = TURN_TIMER_DURATION - elapsed;
+        const remaining = activeTimerDuration - elapsed;
         const bar = document.getElementById('timerBar');
         if (remaining <= 0) {
             bar.style.width = '0%';
             onTimerExpired();
             return;
         }
-        const pct = (remaining / TURN_TIMER_DURATION) * 100;
+        const pct = (remaining / activeTimerDuration) * 100;
         bar.style.width = pct + '%';
-        if (remaining < 10000) {
+        const urgentThreshold = activeTimerDuration <= REROLL_TIMER_DURATION ? 4000 : 10000;
+        if (remaining < urgentThreshold) {
             bar.classList.add('urgent');
         } else {
             bar.classList.remove('urgent');
@@ -2300,6 +2342,7 @@
             clearInterval(timerInterval);
             timerInterval = null;
         }
+        rerollTimerMode = false;
         const container = document.getElementById('timerBarContainer');
         const bar = document.getElementById('timerBar');
         if (container) container.style.display = 'none';
@@ -2310,10 +2353,19 @@
     }
 
     function onTimerExpired() {
+        const wasRerollTimer = rerollTimerMode;
         stopTurnTimer();
+        hideAllRerollButtons();
         clearHighlights();
+
+        if (wasRerollTimer) {
+            // 10s reroll window expired — just pass the turn, no penalty
+            setTimeout(() => nextTurn(), 300);
+            return;
+        }
+
+        // 30s turn timer expired — penalize by sending best piece home
         const player = players[currentPlayerIdx];
-        // Find most advanced piece (highest pos, not finished at 57)
         let bestIdx = -1;
         let bestPos = -2;
         player.tokens.forEach((token, idx) => {
@@ -2360,27 +2412,45 @@
         }
     }
 
-    function showRerollButton() {
-        if (!lifelinesEnabled || gameOver) return;
-        const color = players[currentPlayerIdx].color;
-        const btn = document.getElementById(`reroll-${color}`);
-        if (!btn) return;
-        const available = getAvailableRerolls(currentPlayerIdx);
-        if (available > 0) {
-            btn.textContent = `${available}`;
-            btn.classList.add('visible');
-            btn.disabled = false;
+    function updateDiceLifelines() {
+        for (let i = 0; i < 4; i++) {
+            const p = players[i];
+            const color = p.color;
+            const container = document.getElementById(`lifelines-${color}`);
+            const rerollNum = document.getElementById(`reroll-num-${color}`);
+            const shieldNum = document.getElementById(`shield-num-${color}`);
+            const rerollEl = document.getElementById(`reroll-${color}`);
+
+            if (!container) continue;
+
+            if (!lifelinesEnabled || p.isDisabled) {
+                container.classList.remove('visible');
+                continue;
+            }
+
+            container.classList.add('visible');
+            const rerolls = getAvailableRerolls(i);
+            rerollNum.textContent = rerolls;
+            shieldNum.textContent = p.shieldLifelines;
+
+            // Reroll button is clickable only for current player during awaiting state
+            const isActive = awaitingReroll && i === currentPlayerIdx && rerolls > 0 && !p.isAI;
+            if (isActive) {
+                rerollEl.classList.remove('disabled');
+            } else {
+                rerollEl.classList.add('disabled');
+            }
         }
     }
 
+    function showRerollButton() {
+        if (!lifelinesEnabled || gameOver) return;
+        updateDiceLifelines();
+    }
+
     function hideAllRerollButtons() {
-        for (const color of COLORS) {
-            const btn = document.getElementById(`reroll-${color}`);
-            if (btn) {
-                btn.classList.remove('visible');
-            }
-        }
         awaitingReroll = false;
+        updateDiceLifelines();
     }
 
     function useReroll(color) {
@@ -2511,8 +2581,31 @@
 
             const moves = getValidMoves();
             if (moves.length === 0) {
-                setMessage(`Rolled ${diceValue}. No moves!`);
                 AudioManager.sfxNoMoves();
+
+                // Check if player can reroll on no-moves
+                const canRerollNoMoves = lifelinesEnabled && getAvailableRerolls(currentPlayerIdx) > 0;
+
+                if (canRerollNoMoves && players[currentPlayerIdx].isAI) {
+                    // AI always rerolls on no-moves if it has rerolls
+                    setMessage(`Rolled ${diceValue}. No moves! AI rerolls...`);
+                    consumeReroll(currentPlayerIdx);
+                    updateUI();
+                    setTimeout(doRoll, 700);
+                    return;
+                }
+
+                if (canRerollNoMoves && !players[currentPlayerIdx].isAI) {
+                    // Human player: offer 10s reroll window
+                    setMessage(`Rolled ${diceValue}. No moves! Reroll?`);
+                    awaitingReroll = true;
+                    showRerollButton();
+                    startTurnTimer(REROLL_TIMER_DURATION);
+                    return;
+                }
+
+                // No rerolls available — original behavior
+                setMessage(`Rolled ${diceValue}. No moves!`);
                 if (diceValue === 6) {
                     const player = players[currentPlayerIdx];
                     const allInHomeStretch = player.tokens.every(t => t.pos === 57 || (t.pos >= 51 && t.pos <= 55));
@@ -3317,6 +3410,8 @@
         } else {
             teamScoresEl.style.display = 'none';
         }
+
+        updateDiceLifelines();
     }
 
     function getColorHex(color) {
@@ -3761,6 +3856,51 @@
                 players[1].shieldLifelines = 0;
                 players[2].rerollLifelines = 5; // Yellow — can't share without coop
                 players[3].shieldLifelines = 2; // Blue — can't share without coop
+                break;
+            }
+            case 'rerollNoMoves': {
+                debugScenarioName = 'Reroll on No Moves (home stretch)';
+                debugForceDice = 5;
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                // Red T0 at pos 54 (needs exactly 2 to reach home)
+                // Forced dice=5 overshoots → no moves → 10s reroll window appears
+                // Player can click reroll to try again
+                players[0].tokens[0].pos = 54;
+                players[0].tokens[1].pos = 57; // finished
+                players[0].tokens[2].pos = 57; // finished
+                players[0].tokens[3].pos = 57; // finished
+                players[0].finished = 3;
+                players[0].rerollLifelines = 3;
+                break;
+            }
+            case 'rerollNoMovesCaged': {
+                debugScenarioName = 'Reroll on No Moves (all caged)';
+                debugForceDice = 3;
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                releaseOnOne = false; // classic rules: only 6 releases
+                // Red: all 4 in cage, dice=3 → can't release → no moves
+                // Has 2 rerolls → can try for a 6
+                players[0].rerollLifelines = 2;
+                break;
+            }
+            case 'rerollNoMovesCoopBorrow': {
+                debugScenarioName = 'Reroll No Moves (borrow from teammate)';
+                debugForceDice = 5;
+                isTeamMode = true;
+                teamCoopEnabled = true;
+                lifelinesEnabled = true;
+                // Red T0 at pos 54 (needs exactly 2)
+                // Red has 0 rerolls, Yellow (teammate) has 4
+                // Dice=5 → no moves → should show reroll button with count 4 (borrowed)
+                players[0].tokens[0].pos = 54;
+                players[0].tokens[1].pos = 57;
+                players[0].tokens[2].pos = 57;
+                players[0].tokens[3].pos = 57;
+                players[0].finished = 3;
+                players[0].rerollLifelines = 0;
+                players[2].rerollLifelines = 4; // Yellow teammate
                 break;
             }
         }
