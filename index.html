@@ -1076,6 +1076,8 @@
         <button onclick="loadDebugScenario('rerollNoMoves')">23. Reroll on No Moves (home stretch exact)</button>
         <button onclick="loadDebugScenario('rerollNoMovesCaged')">24. Reroll on No Moves (all caged, need 6)</button>
         <button onclick="loadDebugScenario('rerollNoMovesCoopBorrow')">25. Reroll No Moves (borrow from teammate)</button>
+        <button onclick="loadDebugScenario('rerollSingleMove')">26. Reroll on Single Move</button>
+        <button onclick="loadDebugScenario('rerollSingleMoveCoop')">27. Reroll on Single Move (coop borrow)</button>
         <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
     </div>
 
@@ -1733,6 +1735,7 @@
     let teamCoopEnabled = false;
     let lifelinesEnabled = false;
     let awaitingReroll = false; // true after roll, before move selection — reroll window
+    let pendingAutoMove = null; // stores move to auto-execute when reroll window shown for single-move
     let timerInterval = null;
     let timerStartTime = 0;
     const TURN_TIMER_DURATION = 30000;
@@ -2354,13 +2357,20 @@
 
     function onTimerExpired() {
         const wasRerollTimer = rerollTimerMode;
+        const savedAutoMove = pendingAutoMove;
         stopTurnTimer();
         hideAllRerollButtons();
         clearHighlights();
 
         if (wasRerollTimer) {
-            // 10s reroll window expired — just pass the turn, no penalty
-            setTimeout(() => nextTurn(), 300);
+            // 10s reroll window expired
+            if (savedAutoMove) {
+                // Had a valid single move — execute it instead of skipping
+                setTimeout(() => executeMove(savedAutoMove), 300);
+            } else {
+                // No moves were available — just pass the turn
+                setTimeout(() => nextTurn(), 300);
+            }
             return;
         }
 
@@ -2450,6 +2460,7 @@
 
     function hideAllRerollButtons() {
         awaitingReroll = false;
+        pendingAutoMove = null;
         updateDiceLifelines();
     }
 
@@ -2627,17 +2638,30 @@
                 showCaptureIndicators(moves);
             }
 
-            if (moves.length === 1) {
-                setMessage(`Rolled ${diceValue}. Auto-move...`);
-                setTimeout(() => executeMove(moves[0]), 400);
-                return;
-            }
-
-            const uniquePositions = new Set(moves.map(m => {
-                const pIdx = m.playerIdx !== undefined ? m.playerIdx : currentPlayerIdx;
-                return `${pIdx}-${players[pIdx].tokens[m.tokenIdx].pos}`;
-            }));
-            if (uniquePositions.size === 1) {
+            if (moves.length === 1 || (() => {
+                const ups = new Set(moves.map(m => {
+                    const pIdx = m.playerIdx !== undefined ? m.playerIdx : currentPlayerIdx;
+                    return `${pIdx}-${players[pIdx].tokens[m.tokenIdx].pos}`;
+                }));
+                return ups.size === 1;
+            })()) {
+                // Single effective move — check if player/team has rerolls before auto-moving
+                const hasRerolls = lifelinesEnabled && getAvailableRerolls(currentPlayerIdx) > 0;
+                if (hasRerolls && players[currentPlayerIdx].isAI) {
+                    if (aiConsiderReroll(moves)) {
+                        setTimeout(doRoll, 600);
+                        return;
+                    }
+                }
+                if (hasRerolls && !players[currentPlayerIdx].isAI) {
+                    setMessage(`Rolled ${diceValue}. Reroll or tap piece to move.`);
+                    highlightTokens(moves);
+                    pendingAutoMove = moves[0];
+                    awaitingReroll = true;
+                    showRerollButton();
+                    startTurnTimer(REROLL_TIMER_DURATION);
+                    return;
+                }
                 setMessage(`Rolled ${diceValue}. Auto-move...`);
                 setTimeout(() => executeMove(moves[0]), 400);
                 return;
@@ -3895,6 +3919,38 @@
                 // Red has 0 rerolls, Yellow (teammate) has 4
                 // Dice=5 → no moves → should show reroll button with count 4 (borrowed)
                 players[0].tokens[0].pos = 54;
+                players[0].tokens[1].pos = 57;
+                players[0].tokens[2].pos = 57;
+                players[0].tokens[3].pos = 57;
+                players[0].finished = 3;
+                players[0].rerollLifelines = 0;
+                players[2].rerollLifelines = 4; // Yellow teammate
+                break;
+            }
+
+            case 'rerollSingleMove': {
+                debugScenarioName = 'Reroll on Single Move (own lifeline)';
+                debugForceDice = 2;
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                // Red has only one token in play — single move, should still offer reroll
+                players[0].tokens[0].pos = 30;
+                players[0].tokens[1].pos = 57;
+                players[0].tokens[2].pos = 57;
+                players[0].tokens[3].pos = 57;
+                players[0].finished = 3;
+                players[0].rerollLifelines = 3;
+                break;
+            }
+
+            case 'rerollSingleMoveCoop': {
+                debugScenarioName = 'Reroll on Single Move (coop borrow)';
+                debugForceDice = 2;
+                isTeamMode = true;
+                teamCoopEnabled = true;
+                lifelinesEnabled = true;
+                // Red has one token, 0 rerolls; Yellow teammate has rerolls to share
+                players[0].tokens[0].pos = 30;
                 players[0].tokens[1].pos = 57;
                 players[0].tokens[2].pos = 57;
                 players[0].tokens[3].pos = 57;
