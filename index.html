@@ -898,6 +898,56 @@
         .timer-bar.urgent {
             background: linear-gradient(90deg, #f44336, #ff5722);
         }
+        /* Reroll Lifeline Button */
+        .reroll-btn {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.8);
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: bold;
+            cursor: pointer;
+            pointer-events: auto;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 25;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            transition: transform 0.15s;
+            line-height: 1;
+        }
+        .reroll-btn:hover { transform: scale(1.15); }
+        .reroll-btn.visible { display: flex; }
+        .reroll-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        /* Lifeline counters in player list */
+        .lifeline-badges {
+            display: inline-flex;
+            gap: 4px;
+            margin-left: auto;
+            font-size: 0.7em;
+        }
+        .lifeline-badge {
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .lifeline-badge.reroll {
+            background: rgba(255,152,0,0.3);
+            color: #ff9800;
+        }
+        .lifeline-badge.shield {
+            background: rgba(33,150,243,0.3);
+            color: #42a5f5;
+        }
     </style>
 </head>
 <body>
@@ -963,6 +1013,11 @@
                 <label for="teamCoop">Team cooperation</label>
             </div>
             <div class="option-hint">Move teammate's pieces with your rolls (team modes only)</div>
+            <div class="option-row">
+                <input type="checkbox" id="lifelines" tabindex="12">
+                <label for="lifelines">Lifelines</label>
+            </div>
+            <div class="option-hint">5 rerolls per player + capture shields earned in home stretch</div>
         </div>
         <div class="audio-controls">
             <button class="audio-btn" id="homeMusicBtn" onclick="AudioManager.toggleMusic()">🎵 Music On</button>
@@ -973,6 +1028,7 @@
     <!-- Debug Menu Overlay -->
     <div class="debug-menu hidden" id="debugMenu">
         <h2>Debug Scenarios</h2>
+        <!-- Archived scenarios (1-15) — uncomment to re-enable
         <button onclick="loadDebugScenario('reachHome')">1. Reach Home Bonus</button>
         <button onclick="loadDebugScenario('sixHomeStretch')">2. Six in Home Stretch</button>
         <button onclick="loadDebugScenario('superposedHighlight')">3. Superposed Highlight</button>
@@ -988,6 +1044,14 @@
         <button onclick="loadDebugScenario('timerExpiry')">13. Timer Expiry (30s penalty)</button>
         <button onclick="loadDebugScenario('teamCoop')">14. Team Coop (move teammate)</button>
         <button onclick="loadDebugScenario('teamCoopCaged')">15. Team Coop: finished + caged teammate</button>
+        -->
+        <button onclick="loadDebugScenario('earnShield')">16. Earn Shield (enter home stretch)</button>
+        <button onclick="loadDebugScenario('shieldUsed')">17. Shield Blocks Capture</button>
+        <button onclick="loadDebugScenario('shieldBorrowTeammate')">18. Shield Borrowed from Teammate</button>
+        <button onclick="loadDebugScenario('shieldExhausted')">19. Shield Exhausted (capture goes through)</button>
+        <button onclick="loadDebugScenario('rerollOwn')">20. Reroll (own lifeline)</button>
+        <button onclick="loadDebugScenario('rerollBorrowTeammate')">21. Reroll Borrowed from Teammate</button>
+        <button onclick="loadDebugScenario('lifelinesNoCoop')">22. Lifelines without Coop (no sharing)</button>
         <button class="close-btn" onclick="closeDebugMenu()">Cancel</button>
     </div>
 
@@ -998,21 +1062,25 @@
                 <div class="dice-overlay red" id="dice-overlay-red">
                     <div class="dice-3d" id="dice-red" tabindex="1" onclick="onDiceClick('red')" onkeydown="onDiceKey(event, 'red')">
                         <div class="dice-face dice-face-red" id="dice-face-red"></div>
+                        <button class="reroll-btn" id="reroll-red" onclick="event.stopPropagation(); useReroll('red');" title="Reroll"></button>
                     </div>
                 </div>
                 <div class="dice-overlay green" id="dice-overlay-green">
                     <div class="dice-3d" id="dice-green" tabindex="2" onclick="onDiceClick('green')" onkeydown="onDiceKey(event, 'green')">
                         <div class="dice-face dice-face-green" id="dice-face-green"></div>
+                        <button class="reroll-btn" id="reroll-green" onclick="event.stopPropagation(); useReroll('green');" title="Reroll"></button>
                     </div>
                 </div>
                 <div class="dice-overlay yellow" id="dice-overlay-yellow">
                     <div class="dice-3d" id="dice-yellow" tabindex="3" onclick="onDiceClick('yellow')" onkeydown="onDiceKey(event, 'yellow')">
                         <div class="dice-face dice-face-yellow" id="dice-face-yellow"></div>
+                        <button class="reroll-btn" id="reroll-yellow" onclick="event.stopPropagation(); useReroll('yellow');" title="Reroll"></button>
                     </div>
                 </div>
                 <div class="dice-overlay blue" id="dice-overlay-blue">
                     <div class="dice-3d" id="dice-blue" tabindex="4" onclick="onDiceClick('blue')" onkeydown="onDiceKey(event, 'blue')">
                         <div class="dice-face dice-face-blue" id="dice-face-blue"></div>
+                        <button class="reroll-btn" id="reroll-blue" onclick="event.stopPropagation(); useReroll('blue');" title="Reroll"></button>
                     </div>
                 </div>
             </div>
@@ -1627,6 +1695,8 @@
     let debugScenarioName = '';
     let turnTimerEnabled = false;
     let teamCoopEnabled = false;
+    let lifelinesEnabled = false;
+    let awaitingReroll = false; // true after roll, before move selection — reroll window
     let timerInterval = null;
     let timerStartTime = 0;
     const TURN_TIMER_DURATION = 30000;
@@ -1643,7 +1713,10 @@
             tokens: [{ pos: -1 }, { pos: -1 }, { pos: -1 }, { pos: -1 }],
             finished: 0,
             finishPosition: -1,
-            points: 0
+            points: 0,
+            rerollLifelines: 5,
+            shieldLifelines: 0,
+            tokensEnteredStretch: 0
         }));
     }
 
@@ -1656,6 +1729,7 @@
         useWeightedDice = document.getElementById('useWeightedDice').checked;
         turnTimerEnabled = document.getElementById('turnTimer').checked;
         teamCoopEnabled = document.getElementById('teamCoop').checked && (mode === 'team' || mode === 'team-ai');
+        lifelinesEnabled = document.getElementById('lifelines').checked;
 
         initPlayers();
         
@@ -1842,7 +1916,8 @@
             document.getElementById('showCaptureIndicator'),
             document.getElementById('useWeightedDice'),
             document.getElementById('turnTimer'),
-            document.getElementById('teamCoop')
+            document.getElementById('teamCoop'),
+            document.getElementById('lifelines')
         ];
         const currentFocus = document.activeElement;
         
@@ -2258,6 +2333,138 @@
         setTimeout(() => nextTurn(), 1000);
     }
 
+    // =====================================================
+    // LIFELINES
+    // =====================================================
+    function getAvailableRerolls(pIdx) {
+        if (!lifelinesEnabled) return 0;
+        const player = players[pIdx];
+        let count = player.rerollLifelines;
+        // In team coop, pool rerolls with teammate
+        if (teamCoopEnabled) {
+            const tmIdx = getTeammateIdx(pIdx);
+            if (tmIdx >= 0) count += players[tmIdx].rerollLifelines;
+        }
+        return count;
+    }
+
+    function consumeReroll(pIdx) {
+        const player = players[pIdx];
+        if (player.rerollLifelines > 0) {
+            player.rerollLifelines--;
+        } else if (teamCoopEnabled) {
+            const tmIdx = getTeammateIdx(pIdx);
+            if (tmIdx >= 0 && players[tmIdx].rerollLifelines > 0) {
+                players[tmIdx].rerollLifelines--;
+            }
+        }
+    }
+
+    function showRerollButton() {
+        if (!lifelinesEnabled || gameOver) return;
+        const color = players[currentPlayerIdx].color;
+        const btn = document.getElementById(`reroll-${color}`);
+        if (!btn) return;
+        const available = getAvailableRerolls(currentPlayerIdx);
+        if (available > 0) {
+            btn.textContent = `${available}`;
+            btn.classList.add('visible');
+            btn.disabled = false;
+        }
+    }
+
+    function hideAllRerollButtons() {
+        for (const color of COLORS) {
+            const btn = document.getElementById(`reroll-${color}`);
+            if (btn) {
+                btn.classList.remove('visible');
+            }
+        }
+        awaitingReroll = false;
+    }
+
+    function useReroll(color) {
+        if (!awaitingReroll || gameOver || isAnimating) return;
+        const currentColor = players[currentPlayerIdx].color;
+        if (color !== currentColor) return;
+        if (getAvailableRerolls(currentPlayerIdx) <= 0) return;
+
+        consumeReroll(currentPlayerIdx);
+        hideAllRerollButtons();
+        stopTurnTimer();
+        clearHighlights();
+        clearCaptureIndicators();
+        updateUI();
+
+        // Re-roll
+        doRoll();
+    }
+
+    function aiConsiderReroll(moves) {
+        if (!lifelinesEnabled || getAvailableRerolls(currentPlayerIdx) <= 0) return false;
+        const player = players[currentPlayerIdx];
+        const playerTeam = TEAMS[player.color];
+
+        // AI rerolls if: no captures possible, no releases, and best move is low value
+        let hasCapture = false;
+        let hasRelease = false;
+        let bestMoveScore = 0;
+
+        moves.forEach(move => {
+            if (move.type === 'enter') {
+                hasRelease = true;
+                return;
+            }
+            const pIdx = move.playerIdx !== undefined ? move.playerIdx : currentPlayerIdx;
+            const mp = players[pIdx];
+            const newPos = move.newPos;
+            if (newPos >= 51) { bestMoveScore = Math.max(bestMoveScore, 200); return; }
+            const path = PATHS[mp.color];
+            const [r, c] = path[newPos];
+            const cellKey = `${r}-${c}`;
+            if (!SAFE_CELLS.has(cellKey)) {
+                players.forEach((other, oIdx) => {
+                    if (oIdx === pIdx) return;
+                    if (isTeamMode && TEAMS[other.color] === playerTeam) return;
+                    other.tokens.forEach(ot => {
+                        if (ot.pos >= 0 && ot.pos < 51) {
+                            const [or, oc] = PATHS[other.color][ot.pos];
+                            if (or === r && oc === c) hasCapture = true;
+                        }
+                    });
+                });
+            }
+            bestMoveScore = Math.max(bestMoveScore, newPos);
+        });
+
+        // Reroll if no captures, no releases, and moves are mediocre
+        if (!hasCapture && !hasRelease && bestMoveScore < 30 && diceValue <= 3) {
+            consumeReroll(currentPlayerIdx);
+            updateUI();
+            return true;
+        }
+        return false;
+    }
+
+    function tryConsumeShield(victimPIdx) {
+        const victim = players[victimPIdx];
+        if (victim.shieldLifelines > 0) {
+            victim.shieldLifelines--;
+            updateUI();
+            return true;
+        }
+        // Team coop: try teammate's shields
+        if (teamCoopEnabled) {
+            const tmIdx = getTeammateIdx(victimPIdx);
+            if (tmIdx >= 0 && players[tmIdx].shieldLifelines > 0) {
+                players[tmIdx].shieldLifelines--;
+                updateUI();
+                return true;
+            }
+        }
+        return false;
+    }
+
     function doRoll() {
         canRoll = false;
         AudioManager.sfxDiceRoll();
@@ -2347,9 +2554,18 @@
             highlightTokens(moves);
 
             if (players[currentPlayerIdx].isAI) {
-                setTimeout(() => aiMove(moves), 500);
-            } else if (turnTimerEnabled) {
-                startTurnTimer();
+                // AI considers rerolling
+                if (aiConsiderReroll(moves)) {
+                    setTimeout(doRoll, 600);
+                } else {
+                    setTimeout(() => aiMove(moves), 500);
+                }
+            } else {
+                awaitingReroll = true;
+                showRerollButton();
+                if (turnTimerEnabled) {
+                    startTurnTimer();
+                }
             }
         }, 600);
     }
@@ -2565,6 +2781,7 @@
     // =====================================================
     function executeMove(move) {
         stopTurnTimer();
+        hideAllRerollButtons();
         clearHighlights();
         clearCaptureIndicators();
         isAnimating = true;
@@ -2590,6 +2807,13 @@
                 token.pos = endPos;
                 let captured = false;
                 let reachedHome = false;
+
+                // Award shield lifeline when entering home stretch
+                if (lifelinesEnabled && startPos < 51 && endPos >= 51) {
+                    player.shieldLifelines++;
+                    player.tokensEnteredStretch++;
+                    updateUI();
+                }
 
                 if (token.pos === 56) {
                     reachedHome = true;
@@ -2818,7 +3042,17 @@
 
         candidates.sort((a, b) => b.pos - a.pos);
         const victim = candidates[0];
-        
+
+        // Shield lifeline check: protect the most advanced unsafe piece
+        if (lifelinesEnabled) {
+            // Check if this victim is on an unsafe cell (already guaranteed — safe cells returned earlier)
+            if (tryConsumeShield(victim.playerIdx)) {
+                setMessage(`${players[victim.playerIdx].name}'s shield activated!`);
+                // Pieces coexist — no capture
+                return false;
+            }
+        }
+
         victim.token.pos = -1;
         AudioManager.sfxCapture();
         setMessage(`${player.name} captures!`);
@@ -2894,6 +3128,7 @@
     // =====================================================
     function nextTurn() {
         stopTurnTimer();
+        hideAllRerollButtons();
         let attempts = 0;
         do {
             currentPlayerIdx = (currentPlayerIdx + 1) % 4;
@@ -3046,11 +3281,19 @@
             if (p.finishPosition >= 0) {
                 status = `#${p.finishPosition + 1}`;
             }
+            let lifelineBadges = '';
+            if (lifelinesEnabled) {
+                lifelineBadges = `<span class="lifeline-badges">` +
+                    `<span class="lifeline-badge reroll" title="Rerolls">&#x21bb;${p.rerollLifelines}</span>` +
+                    `<span class="lifeline-badge shield" title="Shields">&#x1f6e1;${p.shieldLifelines}</span>` +
+                    `</span>`;
+            }
             return `
                 <div class="player-item ${idx === currentPlayerIdx ? 'active' : ''}">
                     <div class="pdot" style="background: ${getColorHex(p.color)}"></div>
                     <span class="player-name">${p.name}</span>
                     ${badge}
+                    ${lifelineBadges}
                     <span class="player-score">${status}</span>
                 </div>
             `;
@@ -3420,6 +3663,104 @@
                 // Start on Red's turn — Red should NOT be skipped
                 // Red can roll 6 to release Yellow's caged token
                 currentPlayerIdx = 0;
+                break;
+            }
+            case 'earnShield': {
+                debugScenarioName = 'Earn Shield (enter home stretch)';
+                debugForceDice = 2;
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                // Red T0 at pos 49 — roll 2 → moves to 51 (home stretch), earns 1 shield
+                // Red T1 at pos 20 for reference
+                players[0].tokens[0].pos = 49;
+                players[0].tokens[1].pos = 20;
+                players[0].shieldLifelines = 0;
+                break;
+            }
+            case 'shieldUsed': {
+                debugScenarioName = 'Shield Blocks Capture';
+                debugForceDice = 3;
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                // Green T0 at pos 5 (board cell [6,9] = red path pos 18)
+                // Red T0 at pos 15 — roll 3 → lands on pos 18, would capture Green
+                // Green has 1 shield — should block capture, pieces coexist
+                players[0].tokens[0].pos = 15;
+                players[1].tokens[0].pos = 5;
+                players[1].shieldLifelines = 1;
+                break;
+            }
+            case 'shieldBorrowTeammate': {
+                debugScenarioName = 'Shield Borrowed from Teammate';
+                debugForceDice = 3;
+                isTeamMode = true;
+                teamCoopEnabled = true;
+                lifelinesEnabled = true;
+                // Red T0 at pos 15 — roll 3 → lands on [6,9], captures Green T0
+                // Green T0 at pos 5 (same board cell [6,9])
+                // Green has 0 shields, but Blue (teammate, team 2) has 2 shields
+                // Should borrow from Blue and block the capture
+                players[0].tokens[0].pos = 15;
+                players[1].tokens[0].pos = 5;
+                players[1].shieldLifelines = 0;
+                players[3].shieldLifelines = 2; // Blue is Green's teammate
+                break;
+            }
+            case 'shieldExhausted': {
+                debugScenarioName = 'Shield Exhausted (capture goes through)';
+                debugForceDice = 3;
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                // Same setup as shieldUsed but Green has 0 shields
+                // Capture should go through normally
+                players[0].tokens[0].pos = 15;
+                players[1].tokens[0].pos = 5;
+                players[1].shieldLifelines = 0;
+                break;
+            }
+            case 'rerollOwn': {
+                debugScenarioName = 'Reroll (own lifeline)';
+                debugForceDice = 0; // random dice
+                isTeamMode = true;
+                lifelinesEnabled = true;
+                // Red has 3 rerolls, tokens spread out
+                // Roll dice, then click reroll button to re-roll
+                players[0].tokens[0].pos = 10;
+                players[0].tokens[1].pos = 25;
+                players[0].rerollLifelines = 3;
+                break;
+            }
+            case 'rerollBorrowTeammate': {
+                debugScenarioName = 'Reroll Borrowed from Teammate';
+                debugForceDice = 0; // random dice
+                isTeamMode = true;
+                teamCoopEnabled = true;
+                lifelinesEnabled = true;
+                // Red has 0 rerolls, Yellow (teammate) has 3 rerolls
+                // Red should see reroll button with count 3 (borrowed from Yellow)
+                players[0].tokens[0].pos = 10;
+                players[0].tokens[1].pos = 25;
+                players[0].rerollLifelines = 0;
+                players[2].rerollLifelines = 3; // Yellow
+                break;
+            }
+            case 'lifelinesNoCoop': {
+                debugScenarioName = 'Lifelines without Coop (no sharing)';
+                debugForceDice = 3;
+                isTeamMode = true;
+                teamCoopEnabled = false;
+                lifelinesEnabled = true;
+                // Red T0 at pos 15 — captures Green T0 at [6,9]
+                // Green has 0 shields, Blue has 2 shields
+                // Without coop, Blue's shields should NOT help Green
+                // Red has 0 rerolls, Yellow has 5 — without coop, no borrowing
+                players[0].tokens[0].pos = 15;
+                players[0].tokens[1].pos = 25;
+                players[0].rerollLifelines = 0;
+                players[1].tokens[0].pos = 5;
+                players[1].shieldLifelines = 0;
+                players[2].rerollLifelines = 5; // Yellow — can't share without coop
+                players[3].shieldLifelines = 2; // Blue — can't share without coop
                 break;
             }
         }
